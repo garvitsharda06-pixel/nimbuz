@@ -199,3 +199,53 @@ needs `make download-data && make backtest` on the owner's machine.
 - No pre-open (09:00–09:08) volume in 1-minute candles. Gap setups use first-15-min RVOL as a
   proxy.
 - Index "VWAP" is a session TWAP, because indices have no volume.
+
+## Phase 3: Scoring & risk (done)
+
+**Built**
+- **Probability**: per setup × side × regime bucket hit rate from OOS instances. A bucket is
+  used only when it has ≥ the gate's N (200); otherwise the setup-side pool is used. Values are
+  shrunk toward the setup mean (Beta prior) and isotonic-calibrated (`scoring/statsbook.py`,
+  `scoring/calibration.py`).
+- **CI and ranking**: Wilson 95 % CI, shifted with the calibration. Conservative EV =
+  p_lo·W̄ + (1−p_lo)·L̄. Breakeven p = −L̄/(W̄−L̄).
+- **Gate** (configurable), with the failing reasons shown:
+  - N ≥ 200 OOS
+  - CI low > breakeven
+  - conservative EV > 0
+  - walk-forward stability ≥ 60 %
+- **Reliability diagram and Brier score on held-out data**: forward-chained (isotonic fit on
+  earlier folds, scored on later folds). Printed by `dalal backtest`, stored in `summary.json`,
+  rendered in the Strategy Lab.
+- **Board selection** (`scoring/board.py`, pure and unit-tested):
+  - one idea per symbol (the best conservative EV)
+  - top 5 per side; **never padded**
+  - ≤ 2 per sector per side
+  - near-duplicates dropped (20-day return correlation > 0.8)
+  - net-beta cap on notional/capital
+  - max open ideas
+  - hysteresis: a WATCHING idea is displaced only by a candidate with ≥ 20 % higher conservative
+    EV that also fits the portfolio. TRIGGERED ideas are never displaced.
+- **Candidate builder** (`scoring/candidates.py`):
+  - stats-book lookup; gate enforcement
+  - the stats book's provenance must match the data's (real stats never mix with synthetic
+    data, or the reverse)
+  - the demo gate bypass is honoured **only** on synthetic data
+  - demoted setups are refused
+  - sizing, entry zone, validity window, grade (A+/A/B)
+- **Sizing** (`risk/sizing.py`): (capital × risk %) ÷ |entry − stop|, rounded to lots for
+  futures shorts, capped by MIS notional (capital × leverage).
+- **Guardrails** (`risk/guardrails.py`): kill switch, feed health, before 09:20, after 14:45,
+  daily loss limit, max open ideas, market-wide event blackouts (calendar.yaml).
+- **Thesis bullets** (`scoring/explain.py`): a setup-specific primary bullet plus the top drivers
+  by salience (RS vs Nifty/sector σ, sector rank, RVOL, breadth, VWAP distance, 15-min trend,
+  gap, futures OI). Built only from computed numbers.
+
+**Synthetic run with sensitivity grids** (72 variants in one pass, 179 s): the null dataset is
+still NO EDGE everywhere. The trials ledger now counts every variant, and the deflated Sharpe
+haircut uses it.
+
+**Tests**: 42 pass. The 9 new board/risk tests cover never-pad, top 5 by conservative EV,
+sector cap, correlation dedupe, beta cap, hysteresis, no displacement of triggered ideas, one
+idea per symbol, gate + synthetic-only bypass + provenance mismatch, sizing, guardrails and the
+thesis text.

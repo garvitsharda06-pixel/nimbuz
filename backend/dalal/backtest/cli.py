@@ -34,6 +34,9 @@ def register(app: typer.Typer) -> None:
         if cal.get("n"):
             typer.echo(f"Calibration (OOS, forward-chained): Brier base {cal['brier_base']:.4f} · raw "
                        f"{cal['brier_raw']:.4f} · isotonic {cal['brier_cal']:.4f}  (lower is better)")
+            typer.echo("Reliability (held-out, isotonic forward-chained):  pred → observed [95% CI] (n)")
+            for r in cal.get("reliability_cal", []):
+                typer.echo(f"   {r['pred']:.2f} → {r['obs']:.2f} [{r['obs_lo']:.2f}, {r['obs_hi']:.2f}] ({r['n']})")
         typer.echo(f"\n{'SETUP':<16}{'SIDE':<7}{'VERDICT':<19}{'N_OOS':>6}{'HIT':>7}{'EXP R':>8}{'consEV':>8}"
                    f"{'STAB':>6}{'DSR':>6}")
         for v in summ["verdicts"]:
