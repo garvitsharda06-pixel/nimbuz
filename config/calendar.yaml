@@ -1,0 +1,32 @@
+# Fallback trading calendar. At runtime the Upstox /v2/market/holidays API is preferred.
+# Source and check date: docs/DECISIONS.md D-031.
+holidays:
+  2026:
+    - "2026-01-15"   # Maharashtra municipal elections (listed by some sources)
+    - "2026-01-26"
+    - "2026-03-03"
+    - "2026-03-26"
+    - "2026-03-31"
+    - "2026-04-03"
+    - "2026-04-14"
+    - "2026-05-01"
+    - "2026-05-28"
+    - "2026-06-26"
+    - "2026-09-14"
+    - "2026-10-02"
+    - "2026-10-20"
+    - "2026-11-10"
+    - "2026-11-24"
+    - "2026-12-25"
+
+special_sessions:
+  # Muhurat trading: timings are announced by NSE circular. TBA until then (no signals).
+  - date: "2026-11-08"
+    kind: muhurat
+    open: null
+    close: null
+
+# Market-wide event blackouts (§10). The owner maintains this; best-effort.
+# Dates are not pre-filled: add them from the official RBI MPC / Budget / NSE index notices.
+# Example: - {date: "YYYY-MM-DD", kind: RBI_POLICY, note: "source URL"}
+blackouts: []

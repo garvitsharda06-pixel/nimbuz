@@ -1,0 +1,127 @@
+# Dalal Desk configuration. Secrets go in .env, never here.
+# Every number below is a setting, not a measured fact. See docs/DECISIONS.md.
+
+mode: replay              # live | replay
+
+data:
+  root: data              # relative to repo root
+  provider: synthetic     # upstox | synthetic   (synthetic = plumbing/demo only)
+  history_years: 3
+  stale_seconds: 5        # §6: suspend new signals if live data is older than this
+  max_clock_drift_ms: 2000
+  bar_close_grace_ms: 300 # wait this long after a minute boundary before closing the bar
+  upstox:
+    instruments_url: https://assets.upstox.com/market-quote/instruments/exchange/complete.json.gz
+    rest_base: https://api.upstox.com
+    ws_url: wss://api.upstox.com/v3/feed/market-data-feed
+    feed_mode: full
+    rate_limits: {per_second: 25, per_minute: 250, per_30min: 1000}   # D-010
+    safety_factor: 0.8    # stay at 80 % of published limits
+    index_keys:
+      nifty: "NSE_INDEX|Nifty 50"
+      banknifty: "NSE_INDEX|Nifty Bank"
+      vix: "NSE_INDEX|India VIX"
+    sector_index_keys:
+      BANK: "NSE_INDEX|Nifty Bank"
+      IT: "NSE_INDEX|Nifty IT"
+      AUTO: "NSE_INDEX|Nifty Auto"
+      PHARMA: "NSE_INDEX|Nifty Pharma"
+      METAL: "NSE_INDEX|Nifty Metal"
+      FMCG: "NSE_INDEX|Nifty FMCG"
+      ENERGY: "NSE_INDEX|Nifty Energy"
+      FIN: "NSE_INDEX|Nifty Financial Services"
+      REALTY: "NSE_INDEX|Nifty Realty"
+      MEDIA: "NSE_INDEX|Nifty Media"
+      PSU_BANK: "NSE_INDEX|Nifty PSU Bank"
+      INFRA: "NSE_INDEX|Nifty Infrastructure"
+
+session:
+  tz: Asia/Kolkata
+  open: "09:15"
+  close: "15:30"
+  first_signal: "09:20"   # first completed 5-min candle
+  last_new_idea: "14:45"
+  idea_expiry: "15:10"
+  resolve_at: "15:15"
+
+universe:
+  fno_only: true
+  include_nifty500: false
+  min_median_traded_value_cr: 50
+  min_price: 50
+  lookback_days: 20
+  circuit_buffer_pct: 1.0
+  exclude_event_risk: true
+  exclude_asm_gsm: true
+  exclude_ban_for_futures_shorts: true
+
+risk:
+  capital: 500000          # PLACEHOLDER: set your own (D-001)
+  risk_per_trade_pct: 0.5
+  max_daily_loss_pct: 2.0
+  max_open_ideas: 10
+  max_per_sector_per_side: 2
+  short_instrument: cash   # cash (MIS) | futures
+  mis_leverage: 5.0        # notional cap = capital × leverage (check your broker's MIS margin)
+
+board:
+  max_per_side: 5
+  hysteresis_pct: 20
+  correlation_max: 0.8
+  correlation_lookback_days: 20
+  max_net_beta: 1.5
+  demo_bypass_gates: false # only honoured when data provenance is synthetic (D-002)
+  gate:
+    min_n: 200
+    min_wf_stability: 0.6
+    min_fold_trades: 20
+  grades: {a_plus: 0.25, a: 0.10}
+
+scoring:
+  prior_strength: 50
+  ci_z: 1.96
+  min_bucket_n: 30         # below this a regime bucket falls back to the setup-side pool
+
+backtest:
+  validity_minutes: 30
+  partial_at_t1: 0.5
+  wf_train_months: 12
+  wf_test_months: 3
+  wf_embargo_days: 2
+  slippage: {spread_bps: 3.0, k_vol: 0.10}
+  start: null              # null = all available
+  end: null
+
+setups:
+  orb:            {enabled: true}
+  vwap_reclaim:   {enabled: true}
+  trend_pullback: {enabled: true}
+  pdhl_retest:    {enabled: true}
+  gap:            {enabled: true}
+  rel_strength:   {enabled: true}
+  vwap_mr:        {enabled: true}
+  oi_confirm:     {enabled: false}   # disabled until it has N ≥ 200 OOS instances
+
+notify:
+  browser: true
+  sounds: true
+  telegram: true           # still needs TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID in .env
+  morning_note_at: "08:45"
+  eod_report_at: "15:45"
+
+api:
+  host: 127.0.0.1          # never 0.0.0.0 unless behind Tailscale
+  port: 8000
+  cors_origins: ["http://127.0.0.1:5173", "http://localhost:5173"]
+
+replay:
+  speed: 30
+  date: null               # null = latest stored day
+
+synthetic:
+  symbols: 40
+  days: 750
+  seed: 7
+  start: "2023-01-02"
+  idio_momentum: 0.0       # 0 = no planted edge (null dataset)
+  trend_day_drift_bps: 60
