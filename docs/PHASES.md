@@ -87,3 +87,115 @@ stocks + 10 indices × 750 synthetic days.
 - Reference URLs (NSE archives, niftyindices) are unverified from the sandbox; they fail soft.
 - Corporate-action adjustment needs `config/reference/corporate_actions.csv`. Until it's filled
   in, unexplained gaps are flagged and excluded.
+
+## Phase 2: Research core (done)
+
+**Built**
+- **Day panels** (`features/panel.py`): one symbol's history as days × 375 one-minute bars and
+  days × 75 five-minute bars, plus daily OHLCV and traded value. Forming candles are hidden.
+- **Causal features** (`features/core.py`):
+  - **Daily context, known before the open**: PDH/PDL/PDC, ATR14, σ (20-day), median traded
+    value, slot-volume and realised-vol baselines, β (40-day). All are computed over fixed-length
+    windows (`sliding_window_view`), so values don't depend on how much history is loaded.
+  - **Intraday**: VWAP ±σ from 1-minute bars, EMA9/20 and slope, ATR(5m), 15-min trend filter,
+    opening range, running extremes, cumulative and bar RVOL, gap vs ATR, realised vol vs its
+    baseline, and RS vs Nifty (β-adjusted) and vs sector in σ units.
+- **Regime classifier** (`regime/classifier.py`), every candle:
+  - inputs: Nifty vs its session TWAP (indices carry no volume), the 15-min trend, 20-EMA
+    alignment, breadth (% of universe above VWAP), India VIX change, and realised vol vs baseline
+  - output: TREND_UP / TREND_DOWN / RANGE / HIGH_VOL_CHOP, plus sector strength ranks
+- **Setups** (`setups/library.py`). The first 3 the brief asked for, plus the rest of §8.2
+  delivered early:
+  - ORB
+  - VWAP reclaim/rejection
+  - trend pullback
+  - PDH/PDL break & retest
+  - gap-and-go
+  - gap-fade
+  - relative-strength leader/laggard
+  - VWAP ±2σ mean reversion
+  - ORB + OI confirmation: **disabled**, needs futures OI history
+
+  Each setup declares its allowed regimes, stop-entry trigger, structural stop with an ATR noise
+  floor, T1/T2, time window and invalidation text.
+- **Shared pipeline** (`pipeline.py`): one code path for research and live (indices → breadth →
+  regime → RS → setup context → feature snapshot).
+- **Backtester** (`backtest/engine.py`, `simulate.py`):
+  - signals only at 5-min closes; stop-entry fills on 1-minute bars; ideas void if the stop
+    trades first
+  - same-bar stop+T1 ⇒ stop; limit targets need a tick through; 50 % at T1 then breakeven; 15:15
+    time exit
+  - spread- and volatility-based slippage
+  - risk-based sizing capped by MIS leverage
+  - full cost model applied to both legs
+- **Cost model** (`backtest/costs.py` + `config/costs.yaml`): brokerage, STT (0.025 % cash /
+  0.05 % futures sell side), exchange transaction charge, SEBI fee, stamp duty and GST, each with
+  its source and check date.
+- **Walk-forward** (`backtest/walkforward.py`):
+  - expanding training window ≥ 12 months, 3-month test folds, 2-day embargo
+  - OOS probabilities come from regime-bucket hit rates estimated on training data only, shrunk
+    toward the setup mean
+- **Calibration** (`scoring/calibration.py`): isotonic regression, evaluated forward-chained
+  (fit on earlier folds, score on later ones). Reports Brier for base rate vs raw vs calibrated,
+  plus reliability tables.
+- **Robustness** (`backtest/robustness.py`):
+  - Monte Carlo on trade order (drawdown distribution) and bootstrap of total R
+  - deflated Sharpe with a persistent **trials ledger** (every variant ever run counts)
+  - breakdowns by year, regime, hour and side
+  - pre-declared 3×3 sensitivity grids per setup
+- **Stats book** (`scoring/statsbook.py`): per setup × side × regime OOS evidence (N, Wilson CI,
+  W̄/L̄, expectancy, breakeven, calibrated p, conservative EV, WF stability, DSR), with
+  gate pass/fail reasons.
+- **Tearsheets** (`backtest/report.py`):
+  - OOS and IS side by side, equity in R and ₹, drawdown, WF folds, calibration
+  - MAE/MFE histograms, trades per day, exit reasons, Monte Carlo, DSR, sensitivity grid
+  - a plain-English verdict
+- **CLI**: `dalal backtest [--sensitivity] [--symbols] [--setups]` prints the verdict table and
+  writes `data/<provenance>/research/{statsbook.json, instances.parquet, tearsheets/*.json,
+  summary.json, trials.json}`.
+
+**Results: SYNTHETIC data only (no real market data was reachable from the build sandbox)**
+
+Null synthetic dataset: 40 stocks × 750 days, a random-walk factor model with **no planted
+edge**. The run took 41 s and produced 88k instances, 57k of them OOS. **Every setup came out NO
+EDGE or INSUFFICIENT DATA after costs.** OOS expectancy ran from −0.03 R to −0.35 R, and nothing
+reached the board. This is the correct result: with no edge in the data, costs and slippage make
+every rule lose.
+
+Known-answer test, with idiosyncratic momentum planted in a separate synthetic dataset
+(24 × 500 days):
+
+| Setup / side | Verdict | OOS N | Hit rate | OOS expectancy |
+|---|---|---|---|---|
+| ORB long | **EDGE** | 491 | 68 % | +0.28 R |
+| ORB short | **EDGE** | 471 | 65 % | +0.21 R |
+| Relative strength long | **EDGE** | 425 | 70 % | +0.45 R |
+| Relative strength short | **EDGE** | 350 | 70 % | +0.41 R |
+| VWAP mean reversion | **NO EDGE** (correct: momentum hurts mean reversion) | — | — | — |
+
+Brier score was 0.250 for the base rate and 0.230 for the bucket model. **So the engine finds a
+planted edge and rejects noise. That tells you nothing about real NSE stocks.** The real verdict
+needs `make download-data && make backtest` on the owner's machine.
+
+**Tests** (33 total, all pass):
+- **Look-ahead**: perturbing future bars changes no past feature, regime, breadth or signal.
+- **Live/research parity**: a live panel with only 25 prior days plus a partial day equals the
+  full-history features to within 1e-12.
+- **Determinism**: two research runs produce identical instances.
+- **Fill rules**: 8 scenarios, plus the short-side mirror.
+- **Cost model**: checked against a hand calculation.
+- **Sizing**: risk-based, MIS cap, lot rounding.
+- **Stats**: Wilson, breakeven, EV.
+- **DSR**: more trials give a bigger haircut.
+- **Folds**: embargo honoured, no overlap.
+- **Walk-forward**: does not leak future regimes.
+- **Known-answer**: planted edge found, noise rejected.
+
+`ruff` and `mypy` are clean.
+
+**Known gaps**
+- Historical event risk and ASM/GSM membership aren't available historically. The backtest
+  universe uses only liquidity and price filters (live applies all filters).
+- No pre-open (09:00–09:08) volume in 1-minute candles. Gap setups use first-15-min RVOL as a
+  proxy.
+- Index "VWAP" is a session TWAP, because indices have no volume.

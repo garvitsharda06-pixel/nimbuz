@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from typing import Any
 
 
@@ -25,10 +26,8 @@ class Bus:
             self.last[msg["type"]] = msg
         for q in list(self._subs):
             if q.full():           # slow consumer: drop oldest rather than block the engine
-                try:
+                with contextlib.suppress(asyncio.QueueEmpty):
                     q.get_nowait()
-                except asyncio.QueueEmpty:
-                    pass
             q.put_nowait(msg)
 
     @property

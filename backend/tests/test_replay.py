@@ -39,7 +39,7 @@ async def test_replay_is_deterministic(syn_store):
 
 
 async def test_replay_speed_30x_paces_two_seconds_per_minute(syn_store):
-    insts, roles = syn_store.instruments()
+    _insts, roles = syn_store.instruments()
     day = syn_store.days(roles["nifty"])[2]
     src = ReplaySource(syn_store, day, [roles["nifty"]], speed=30, emit_ticks=True)
     loop = asyncio.get_running_loop()

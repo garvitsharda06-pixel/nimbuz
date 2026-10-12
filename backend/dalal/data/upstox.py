@@ -8,6 +8,7 @@ certificate verification; this client keeps verification on.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import gzip
 import json
 import time as _time
@@ -173,10 +174,8 @@ class UpstoxREST:
             r = await c.get(self.cfg.instruments_url)
             r.raise_for_status()
             raw = r.content
-        try:
+        with contextlib.suppress(OSError):
             raw = gzip.decompress(raw)
-        except OSError:
-            pass
         return json.loads(raw)
 
     async def historical_1m(self, key: str, start: date, end: date) -> pd.DataFrame:
@@ -211,7 +210,9 @@ def build_sub_request(keys: list[str], mode: str, method: str = "sub") -> bytes:
 
 
 def decode_feed(buf: bytes, recv_ts: datetime) -> tuple[list[Tick], dict[str, Any]]:
-    from dalal.data.proto import MarketDataFeedV3_pb2 as pb
+    import importlib
+
+    pb: Any = importlib.import_module("dalal.data.proto.MarketDataFeedV3_pb2")
 
     fr = pb.FeedResponse()
     fr.ParseFromString(buf)

@@ -6,6 +6,7 @@ Live and replay use the same `_run` loop; only the event source differs (§6 rep
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time as _time
 from datetime import date, datetime
 from typing import Any
@@ -104,10 +105,8 @@ class Runtime:
             self.source.stopped = True
         if self.task and not self.task.done():
             self.task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self.task
-            except (asyncio.CancelledError, Exception):
-                pass
         self.task = None
         self.source = None
         self.mode = "IDLE"

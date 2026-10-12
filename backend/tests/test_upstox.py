@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import json
 from datetime import date, datetime
 
@@ -7,7 +8,14 @@ import pytest
 
 from dalal.clock import IST
 from dalal.data.reference import parse_fo_ban, parse_nifty500, parse_sec_bhav
-from dalal.data.upstox import RateLimiter, build_sub_request, decode_feed, month_chunks, parse_candles, parse_instruments
+from dalal.data.upstox import (
+    RateLimiter,
+    build_sub_request,
+    decode_feed,
+    month_chunks,
+    parse_candles,
+    parse_instruments,
+)
 
 
 def test_parse_instruments_marks_fno_and_near_future():
@@ -45,7 +53,7 @@ def test_parse_candles_sorted_and_tz():
 def test_month_chunks_cover_range_without_overlap():
     ch = month_chunks(date(2022, 1, 15), date(2022, 4, 10))
     assert ch[0][0] == date(2022, 1, 15) and ch[-1][1] == date(2022, 4, 10)
-    for (_, e), (s2, _) in zip(ch, ch[1:], strict=False):
+    for (_, e), (s2, _) in itertools.pairwise(ch):
         assert (s2 - e).days == 1
     assert all((e - s).days <= 31 for s, e in ch)
 

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -51,7 +52,7 @@ def _profile() -> np.ndarray:
     return p / np.sqrt(np.mean(p**2))
 
 
-def synthetic_roles() -> dict[str, object]:
+def synthetic_roles() -> dict[str, Any]:
     return {
         "nifty": "SYN_INDEX|Nifty 50",
         "banknifty": "SYN_INDEX|Nifty Bank",
@@ -87,7 +88,7 @@ def build_instruments(p: SynthParams, rng: np.random.Generator) -> tuple[list[In
     roles = synthetic_roles()
     for name, key in [("Nifty 50", roles["nifty"]), ("Nifty Bank", roles["banknifty"]), ("India VIX", roles["vix"])]:
         insts.append(Instrument(key=str(key), symbol=name, segment="SYN_INDEX", kind="INDEX", sector="INDEX"))
-    for s, key in roles["sectors"].items():  # type: ignore[union-attr]
+    for s, key in roles["sectors"].items():
         if s == "BANK":
             continue  # Nifty Bank doubles as the BANK sector index
         insts.append(Instrument(key=key, symbol=f"Nifty {s}", segment="SYN_INDEX", kind="INDEX", sector=s))
@@ -98,7 +99,7 @@ def _round_tick(x: np.ndarray, tick: float = 0.05) -> np.ndarray:
     return np.round(x / tick) * tick
 
 
-def generate(store_root, p: SynthParams, cal: TradingCalendar | None = None) -> CandleStore:  # noqa: C901
+def generate(store_root, p: SynthParams, cal: TradingCalendar | None = None) -> CandleStore:
     rng = np.random.default_rng(p.seed)
     cal = cal or TradingCalendar.from_config()
     days: list[date] = []
@@ -133,7 +134,7 @@ def generate(store_root, p: SynthParams, cal: TradingCalendar | None = None) -> 
 
     out: dict[str, list[pd.DataFrame]] = {k: [] for k in keys}
     idx_out: dict[str, list[pd.DataFrame]] = {
-        str(roles["nifty"]): [], str(roles["vix"]): [], **{v: [] for v in roles["sectors"].values()}  # type: ignore[union-attr]
+        str(roles["nifty"]): [], str(roles["vix"]): [], **{v: [] for v in roles["sectors"].values()}
     }
     open_t = time(9, 15)
 
@@ -193,7 +194,7 @@ def generate(store_root, p: SynthParams, cal: TradingCalendar | None = None) -> 
         price = cl[:, -1].copy()
 
         # ---- indices (minute OHLC from the factor paths) ----
-        def _idx_frame(level0: float, r: np.ndarray, gap: float) -> tuple[pd.DataFrame, float]:
+        def _idx_frame(level0: float, r: np.ndarray, gap: float, ts: pd.DatetimeIndex = ts) -> tuple[pd.DataFrame, float]:
             op = level0 * np.exp(gap)
             pth = (op * np.exp(np.cumsum(r))).reshape(MINUTES, SUB)
             io = np.concatenate([[op], pth[:-1, -1]])
@@ -206,7 +207,7 @@ def generate(store_root, p: SynthParams, cal: TradingCalendar | None = None) -> 
         idx_out[str(roles["nifty"])].append(f)
         for si, s in enumerate(SECTORS):
             f, sec_lvl[si] = _idx_frame(sec_lvl[si], r_m + r_s[si], gap_m + gap_s[si])
-            idx_out[roles["sectors"][s]].append(f)  # type: ignore[index]
+            idx_out[roles["sectors"][s]].append(f)
         # VIX: anchored to the vol regime, moves inversely to the market intraday
         target = 100 * sig_m * np.sqrt(252) * 0.95
         vix_open = vix_lvl + 0.5 * (target - vix_lvl) + rng.normal(0, 0.3)

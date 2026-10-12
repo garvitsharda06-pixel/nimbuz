@@ -74,7 +74,7 @@ def test_synthetic_is_deterministic_and_clean(tmp_path):
     b = generate(tmp_path / "b", p)
     k = a.keys()[0]
     pd.testing.assert_frame_equal(a.read(k), b.read(k))
-    for key in a.keys():
+    for key in a.keys():  # noqa: SIM118 (CandleStore, not a dict)
         inst = {i.key: i for i in a.instruments()[0]}[key]
         rep = check_candles(key, a.read(key), is_index=inst.kind == "INDEX")
         assert rep.ok, (key, rep.issues)
