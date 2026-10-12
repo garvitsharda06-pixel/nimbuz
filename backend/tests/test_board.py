@@ -47,10 +47,12 @@ def test_sector_cap_correlation_and_beta():
     x, y = idea("X", ev=0.3, sector="BANK"), idea("Y", ev=0.2, sector="AUTO")
     d = select_board([], [x, y], S.board, S.risk, lambda p, q: 0.9)
     assert [i.symbol for i in d.longs] == ["X"] and "near-duplicate" in d.rejected["Y-long"]
-    big = [idea(f"B{i}", ev=0.3 - i / 100, sector=f"S{i}", beta=1.4, notional=250000) for i in range(4)]
+    big = [idea(f"B{i}", ev=0.3 - i / 100, sector=f"S{i}", beta=1.4) for i in range(4)]
     d = select_board([], big, S.board, S.risk, NOCORR)
-    assert abs(net_beta(d.longs, S.risk.capital)) <= S.board.max_net_beta
+    assert abs(net_beta(d.longs)) <= S.board.max_net_beta and len(d.longs) == 3       # 4 × 1.4 = 5.6 > 5
     assert any("net beta" in r for r in d.rejected.values())
+    hedge = select_board(d.longs, [idea("H", side="short", ev=0.1, sector="Z", beta=1.4)], S.board, S.risk, NOCORR)
+    assert [i.symbol for i in hedge.shorts] == ["H"]                                     # shorts reduce net beta
 
 
 def test_hysteresis_no_flicker():

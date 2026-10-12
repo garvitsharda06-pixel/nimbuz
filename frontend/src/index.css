@@ -1,0 +1,51 @@
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #07080a;
+  --panel: #0d0f13;
+  --panel2: #13161c;
+  --line: #1c2028;
+  --ink: #d8dde4;
+  --mute: #7c8694;
+  --long: #22c55e;
+  --short: #ef4444;
+  --warn: #f59e0b;
+  --accent: #60a5fa;
+  color-scheme: dark;
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.num { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.hair { border-color: var(--line); }
+.label { color: var(--mute); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; }
+.scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: #232833; border-radius: 3px; }
+
+.watermark {
+  pointer-events: none; position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 64px; font-weight: 600; color: rgba(245, 158, 11, 0.045); transform: rotate(-18deg); z-index: 0;
+  letter-spacing: .1em; white-space: nowrap;
+}
+.ribbon-demo {
+  background: repeating-linear-gradient(135deg, rgba(245,158,11,.16) 0 8px, rgba(245,158,11,.06) 8px 16px);
+  color: var(--warn);
+}
+kbd { font-family: "JetBrains Mono", monospace; font-size: 10px; padding: 1px 4px; border: 1px solid var(--line); border-radius: 3px; color: var(--mute); }
+:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }

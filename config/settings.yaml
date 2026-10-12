@@ -69,7 +69,7 @@ board:
   hysteresis_pct: 20
   correlation_max: 0.8
   correlation_lookback_days: 20
-  max_net_beta: 1.5
+  max_net_beta: 5.0        # |Σ side×β| over board ideas (each idea = 1 unit of risk); bites on high-beta crowding
   demo_bypass_gates: false # only honoured when data provenance is synthetic (D-002)
   gate:
     min_n: 200

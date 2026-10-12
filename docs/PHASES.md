@@ -249,3 +249,81 @@ haircut uses it.
 sector cap, correlation dedupe, beta cap, hysteresis, no displacement of triggered ideas, one
 idea per symbol, gate + synthetic-only bypass + provenance mismatch, sizing, guardrails and the
 thesis text.
+
+## Phase 4: Live board v1 (done)
+
+**Built**
+- **Live engine** (`live/engine.py`). LIVE and REPLAY use the same code. On every completed
+  5-min candle, the universe is processed as **one stacked batch**: prev-day and today rows for
+  all symbols go through the *same* feature, regime and setup functions the research engine uses.
+  The rest of the pipeline is breadth, then regime, then setups, then the stats-book gate,
+  sizing, guardrails, and the board (portfolio pass + hysteresis). Ideas are journaled through a
+  sink interface (Phase 5).
+- **Tracker** (`live/tracker.py`):
+  - status machine Watching → Triggered → T1 hit → T2 hit / Stopped / Closed (breakeven or
+    15:15) / Expired / Invalidated / Displaced
+  - same rules as the backtester; test: 40 random paths give identical fills, labels and net R
+  - LIVE also tracks on ticks
+- **API**: `/api/board`, `/api/market`, `/api/idea/{id}` (card, evidence, 5 most similar
+  **earlier** OOS instances), `/api/research/*`, `/api/settings`. `/ws` streams status, health,
+  prices (batched every 250 ms), minute, board, market, idea_new, idea_update. JSON encoding is
+  numpy-safe.
+- **Terminal UI** (`frontend/`: React + TS + Vite + Tailwind, Lightweight Charts, ECharts,
+  Zustand, TanStack Query; Inter + JetBrains Mono with tabular numbers, bundled locally):
+  - **Top bar**: IST clock, market status, Nifty, Bank Nifty, VIX, USD/INR ("—" when there's no
+    source), A/D, % above VWAP, regime badge, feed-health dot + latency, LIVE/REPLAY + SYNTHETIC
+    badges, browser-alert enable, mute, **kill switch**, replay controls (day, speed, pause).
+    Red banner when the feed is stale.
+  - **Board**: TOP LONGS | TOP SHORTS. Each card shows symbol, sector, setup, grade, entry zone,
+    stop, T1/T2, R:R, calibrated P with Wilson CI and N, conservative EV, expectancy, qty and
+    ₹ risk, signal time and validity, live distance to entry, status, a sparkline with VWAP,
+    3 thesis bullets and the invalidation. Also: a never-padded empty state, guardrail and
+    filter counts, a resolved-today table, and the stats-book provenance.
+  - **Demo ideas and synthetic data are always labelled**: a striped "GATE BYPASSED: PLUMBING
+    DEMO" ribbon and a SYNTHETIC watermark. An **in-sample warning** appears when a replay day is
+    inside the stats book's sample.
+  - **Pop-ups**: slide-in toasts with a glow, distinct WebAudio tones for long and short, and
+    browser notifications when the tab is hidden.
+  - **Drawer**:
+    - Lightweight Charts candles (1/5/15-min) with VWAP, EMA20, volume and entry/stop/T1/T2
+      lines; TradingView attribution logo + link
+    - plan, full evidence panel (calibrated P, CI, N, W̄/L̄, expectancy, breakeven, conservative
+      EV, PF, WF stability, DSR, live hit), thesis, timeline, similar instances, feature
+      snapshot
+    - futures OI shows "not available" (honest)
+  - **Market overview**: sector heatmap (treemap), sector-rotation chart vs Nifty, breadth
+    curve, sector ranking, volume shockers, RS leaders and laggards, and honest empty OI and
+    events panels.
+  - **Keyboard**: J/K move, Enter open, Esc close, / search, Space mute.
+  - **Mobile**: Longs/Shorts tabs with swipe.
+- `dalal serve --demo`: gate bypass so you can watch the plumbing. **Honoured only on synthetic
+  data.**
+
+**Measured**
+- 5-min pipeline: **28–94 ms** for the 31-symbol synthetic universe.
+- Scale test with **453 symbols**: **145 ms median, 180 ms p95, 521 ms max**. All within the 1 s
+  budget.
+
+**Tests**: 86 backend tests pass, including:
+- **live/replay ↔ research signal parity** on a replayed day (every raw signal identical)
+- ideas appear, update and fully resolve by 15:15
+- pipeline < 1 s
+- nothing shown when nothing qualifies and the bypass is off
+- tracker ≡ simulator (40 paths)
+
+2 Playwright smoke tests pass: board, keyboard, drawer + chart + evidence, market charts, kill
+switch, mobile tabs.
+
+**Bugs found and fixed during visual QA**:
+- numpy values silently killed the WebSocket
+- the chart crashed on unmount
+- the BANK sector index never received bars (shared key with Bank Nifty)
+- "similar instances" leaked the replay day
+- the notional-based beta cap allowed only one or two longs; it's now risk units, cap 5
+
+**How to run**
+
+```
+make synth && make backtest && make build-ui
+backend/.venv/bin/dalal serve --demo        # open http://127.0.0.1:8000, pick a day, ▶ Start
+```

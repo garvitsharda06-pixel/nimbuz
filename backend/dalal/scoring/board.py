@@ -46,12 +46,24 @@ def corr_from_returns(rets: dict[str, np.ndarray], min_obs: int = 15) -> Corr:
     return f
 
 
-def net_beta(ideas: list[Idea], capital: float) -> float:
-    tot = 0.0
-    for i in ideas:
-        b = i.beta if np.isfinite(i.beta) else 1.0
-        tot += i.sign * b * i.notional
-    return tot / capital if capital > 0 else 0.0
+def net_beta(ideas: list[Idea], capital: float | None = None) -> float:
+    """Net beta of the board in risk units: Σ side × β, each idea counting as one unit of risk
+    (every idea is sized to the same ₹ risk). Missing β counts as 1."""
+    return float(sum(i.sign * (i.beta if np.isfinite(i.beta) else 1.0) for i in ideas))
+
+
+def reason_key(reason: str) -> str:
+    """Stable category for a rejection reason (numbers stripped) for the board's filter counts."""
+    r = reason.lower()
+    for k, label in [("net beta", "net-beta cap"), ("sector cap", "sector cap"), ("near-duplicate", "correlated duplicate"),
+                     ("already on the board", "symbol already on board"), ("better setup", "better setup same symbol"),
+                     ("side full", "board side full"), ("hysteresis", "hysteresis"), ("max open", "max open ideas"),
+                     ("n ", "N below minimum"), ("ci low", "CI below breakeven"), ("conservative ev", "conservative EV ≤ 0"),
+                     ("stability", "WF stability"), ("demoted", "setup demoted"), ("no out-of-sample", "no OOS stats"),
+                     ("provenance", "provenance mismatch"), ("size rounds", "size rounds to 0"), ("guardrail", "guardrail")]:
+        if r.startswith(k) or k in r:
+            return label
+    return reason[:40]
 
 
 def fits(c: Idea, board: list[Idea], cfg: BoardCfg, risk: RiskCfg, corr: Corr) -> str | None:
@@ -63,8 +75,8 @@ def fits(c: Idea, board: list[Idea], cfg: BoardCfg, risk: RiskCfg, corr: Corr) -
         r = corr(c.key, i.key)
         if r is not None and r > cfg.correlation_max:
             return f"near-duplicate of {i.symbol} (20-day corr {r:.2f})"
-    nb = net_beta([*board, c], risk.capital)
-    if abs(nb) > cfg.max_net_beta:
+    nb = net_beta([*board, c])
+    if abs(nb) > cfg.max_net_beta and abs(nb) > abs(net_beta(board)):
         return f"net beta {nb:+.2f} would exceed ±{cfg.max_net_beta:g}"
     if len(board) >= risk.max_open_ideas:
         return f"max open ideas {risk.max_open_ideas}"

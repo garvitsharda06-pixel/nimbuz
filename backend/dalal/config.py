@@ -98,7 +98,7 @@ class BoardCfg(BaseModel):
     hysteresis_pct: float = 20.0
     correlation_max: float = 0.8
     correlation_lookback_days: int = 20
-    max_net_beta: float = 1.5
+    max_net_beta: float = 5.0
     demo_bypass_gates: bool = False
     gate: GateCfg = GateCfg()
     grades: GradesCfg = GradesCfg()

@@ -81,7 +81,18 @@ def thesis(setup: str, side: str, s: dict[str, Any], regime: str, n_sectors: int
         if len(bullets) >= 3:
             break
         bullets.append(t)
-    if len(bullets) < 3:
-        sc = s.get("mkt_score")
-        bullets.append(f"Market regime {regime.replace('_', ' ').title()}" + (f" (score {sc:+.0f})" if _fin(sc) else ""))
+    sc = s.get("mkt_score")
+    fallbacks = [f"Market regime {regime.replace('_', ' ').title()}" + (f" (score {sc:+.0f})" if _fin(sc) else "")]
+    rv, z, b = s.get("rvol_cum"), s.get("rs_mkt_z"), s.get("breadth")
+    if _fin(rv):
+        fallbacks.append(f"Volume {rv:.1f}× normal for this time of day")
+    if _fin(z):
+        fallbacks.append(f"RS vs Nifty {z:+.1f}σ")
+    if _fin(b):
+        fallbacks.append(f"Breadth {b:.0%} of universe above VWAP")
+    for f in fallbacks:
+        if len(bullets) >= 3:
+            break
+        if f not in bullets:
+            bullets.append(f)
     return bullets[:3]

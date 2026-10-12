@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 from datetime import date as Date
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import orjson
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, ORJSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from dalal.config import Settings, get_settings
@@ -19,6 +20,27 @@ from dalal.data.candles import resample
 from dalal.live.runtime import Runtime
 
 STATIC = Path(__file__).parent / "static"
+_OPTS = orjson.OPT_SERIALIZE_NUMPY | orjson.OPT_NON_STR_KEYS
+
+
+def _default(o: Any) -> Any:
+    if isinstance(o, (np.generic,)):
+        return o.item()
+    if isinstance(o, (Date, datetime)):
+        return o.isoformat()
+    if isinstance(o, (set, tuple)):
+        return list(o)
+    return str(o)
+
+
+def dumps(m: Any) -> bytes:
+    """WebSocket/JSON encoder: numpy scalars & arrays, dates, NaN → null."""
+    return orjson.dumps(m, option=_OPTS, default=_default)
+
+
+class NumpyJSONResponse(JSONResponse):
+    def render(self, content: Any) -> bytes:
+        return dumps(content)
 
 
 class ReplayReq(BaseModel):
@@ -39,12 +61,12 @@ class KillReq(BaseModel):
 def create_app(settings: Settings | None = None, runtime: Runtime | None = None) -> FastAPI:
     settings = settings or get_settings()
     rt = runtime or Runtime(settings)
-    app = FastAPI(title="Dalal Desk", default_response_class=ORJSONResponse)
+    app = FastAPI(title="Dalal Desk", default_response_class=NumpyJSONResponse)
     app.state.rt = rt
     app.add_middleware(CORSMiddleware, allow_origins=settings.api.cors_origins, allow_methods=["*"],
                        allow_headers=["*"])
 
-    with contextlib.suppress(Exception):
+    if rt.engine is None:
         from dalal.live.engine import attach_engine
         attach_engine(rt)
 
@@ -117,13 +139,16 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
         q = rt.bus.subscribe()
         try:
             for m in list(rt.bus.last.values()):
-                await sock.send_bytes(orjson.dumps(m))
-            await sock.send_bytes(orjson.dumps({"type": "status", **rt.status()}))
+                await sock.send_bytes(dumps(m))
+            await sock.send_bytes(dumps({"type": "status", **rt.status()}))
             while True:
                 m = await q.get()
-                await sock.send_bytes(orjson.dumps(m))
+                await sock.send_bytes(dumps(m))
         except (WebSocketDisconnect, asyncio.CancelledError, RuntimeError):
             pass
+        except Exception as e:  # never kill the socket silently
+            from dalal.log import get_logger
+            get_logger("ws").error("ws_send_failed", error=repr(e)[:300])
         finally:
             rt.bus.unsubscribe(q)
 

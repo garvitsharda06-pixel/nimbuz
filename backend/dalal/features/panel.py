@@ -64,8 +64,7 @@ def panel_from_1m(key: str, df: pd.DataFrame, partial_last_day_minutes: int | No
     and its daily row is NaN (not yet known)."""
     if df.empty:
         z = np.zeros((0, N1))
-        return SymbolPanel(key, np.array([], dtype=object), z, z, z, z, z, z, *(np.zeros((0, N5)),) * 5,
-                           *(np.zeros(0),) * 6)
+        return panel_from_arrays(key, np.array([], dtype=object), z, z, z, z, z, z)
     t = df["ts"].dt.tz_convert(IST)
     day = t.dt.date.to_numpy()
     minute = ((t.dt.hour * 60 + t.dt.minute) - OPEN_MIN).to_numpy()
@@ -79,12 +78,32 @@ def panel_from_1m(key: str, df: pd.DataFrame, partial_last_day_minutes: int | No
         a = _empty(D, N1)
         a[rows[ok], minute[ok]] = df[name].to_numpy(dtype=float)[ok]
         arrs[name] = a
-    if partial_last_day_minutes is not None:
-        for a in arrs.values():
-            a[-1, partial_last_day_minutes:] = np.nan
-    o1, h1, l1, c1, v1, oi1 = (arrs[k] for k in ["open", "high", "low", "close", "volume", "oi"])
+    return panel_from_arrays(key, days, arrs["open"], arrs["high"], arrs["low"], arrs["close"], arrs["volume"],
+                             arrs["oi"], partial_last_day_minutes)
+
+
+def panel_from_arrays(key: str, days: np.ndarray, o1: np.ndarray, h1: np.ndarray, l1: np.ndarray, c1: np.ndarray,
+                      v1: np.ndarray, oi1: np.ndarray, partial_last_day_minutes: int | None = None,
+                      visible: np.ndarray | None = None) -> SymbolPanel:
+    """Panel from (D, 375) minute arrays (copied). Used directly by the live engine.
+
+    `visible` (optional, per row): number of visible minutes in each row, for stacked
+    multi-symbol panels where several rows are "today" (in-progress sessions)."""
+    o1, h1, l1, c1, v1, oi1 = (np.array(a, dtype=float, copy=True) for a in (o1, h1, l1, c1, v1, oi1))
+    D = len(days)
+    if D == 0:
+        z5 = np.zeros((0, N5))
+        z = np.zeros(0)
+        return SymbolPanel(key, days, o1, h1, l1, c1, v1, oi1, z5, z5, z5, z5, z5, z, z, z, z, z, z)
+    if visible is None:
+        visible = np.full(D, N1)
+        if partial_last_day_minutes is not None:
+            visible[-1] = partial_last_day_minutes
+    cut = np.arange(N1)[None, :] >= visible[:, None]
+    for a in (o1, h1, l1, c1, v1, oi1):
+        a[cut] = np.nan
     # fill missing minutes inside the visible part of each day: carry close, zero volume
-    _fill_missing(o1, h1, l1, c1, v1, visible_last=partial_last_day_minutes)
+    _fill_missing(o1, h1, l1, c1, v1, visible)
     o5, h5, l5, c5, v5 = agg5(o1, h1, l1, c1, v1)
     tp = (h1 + l1 + c1) / 3.0
     with np.errstate(invalid="ignore"), warnings.catch_warnings():
@@ -99,10 +118,23 @@ def panel_from_1m(key: str, df: pd.DataFrame, partial_last_day_minutes: int | No
     return SymbolPanel(key, days, o1, h1, l1, c1, v1, oi1, o5, h5, l5, c5, v5, do, dh, dl, dc, dv, dtv)
 
 
-def _fill_missing(o1, h1, l1, c1, v1, visible_last: int | None) -> None:
-    D = c1.shape[0]
-    for d in range(D):
-        lim = N1 if (visible_last is None or d < D - 1) else visible_last
+def append_empty_day(p: SymbolPanel, day: date) -> SymbolPanel:
+    """Add an all-NaN row for `day` (a session that has not produced any bars yet)."""
+    def r1(a: np.ndarray, n: int) -> np.ndarray:
+        return np.concatenate([a, np.full((1, n), np.nan)], axis=0)
+
+    def r0(a: np.ndarray) -> np.ndarray:
+        return np.concatenate([a, [np.nan]])
+
+    return SymbolPanel(p.key, np.array([*p.days, day], dtype=object), r1(p.o1, N1), r1(p.h1, N1), r1(p.l1, N1),
+                       r1(p.c1, N1), r1(p.v1, N1), r1(p.oi1, N1), r1(p.o5, N5), r1(p.h5, N5), r1(p.l5, N5),
+                       r1(p.c5, N5), r1(p.v5, N5), r0(p.do), r0(p.dh), r0(p.dl), r0(p.dc), r0(p.dv), r0(p.dtv))
+
+
+def _fill_missing(o1, h1, l1, c1, v1, visible: np.ndarray) -> None:
+    rows = np.where(np.isnan(c1) & (np.arange(N1)[None, :] < visible[:, None]))[0]
+    for d in np.unique(rows):
+        lim = int(visible[d])
         if lim <= 0:
             continue
         row = c1[d, :lim]

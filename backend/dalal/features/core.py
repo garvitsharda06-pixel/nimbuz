@@ -13,6 +13,7 @@ from typing import Any
 
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
+from scipy.signal import lfilter
 
 from dalal.features.panel import N1, N5, SymbolPanel
 
@@ -63,17 +64,27 @@ def shift1(x: np.ndarray) -> np.ndarray:
 
 
 def ema_rows(x: np.ndarray, alpha: float) -> np.ndarray:
-    """EMA along axis 1 for each row independently; NaN inputs carry the previous value.
-    Seeds with the first non-NaN value of the row."""
-    out = np.full_like(x, np.nan, dtype=float)
-    prev = np.full(x.shape[0], np.nan)
-    for j in range(x.shape[1]):
-        xj = x[:, j]
-        nxt = np.where(np.isnan(prev), xj, alpha * xj + (1 - alpha) * prev)
-        nxt = np.where(np.isnan(xj), prev, nxt)
-        out[:, j] = nxt
-        prev = nxt
-    return out
+    """EMA along axis 1, each row independent (C speed via lfilter).
+
+    Causal NaN handling: interior/trailing NaNs are forward-filled; the EMA is seeded with the
+    row's first finite value and is NaN before it. Rows are processed independently, so a
+    row's result is identical whatever other rows are in the array (live/research parity).
+    """
+    x = np.asarray(x, dtype=float)
+    if x.size == 0:
+        return x.copy()
+    D, n = x.shape
+    fin = np.isfinite(x)
+    started = np.logical_or.accumulate(fin, axis=1)
+    idx = np.where(fin, np.arange(n)[None, :], 0)
+    np.maximum.accumulate(idx, axis=1, out=idx)
+    xf = x[np.arange(D)[:, None], idx]                       # forward-filled
+    first = np.argmax(fin, axis=1)
+    seed = x[np.arange(D), first]
+    seed = np.where(np.isfinite(seed), seed, 0.0)
+    xf = np.where(started, xf, seed[:, None])                # leading gap = seed (EMA stays at seed)
+    y, _ = lfilter([alpha], [1.0, -(1.0 - alpha)], xf, axis=1, zi=((1.0 - alpha) * seed)[:, None])
+    return np.where(started, y, np.nan)
 
 
 def with_prev_day(x: np.ndarray) -> np.ndarray:

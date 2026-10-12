@@ -12,12 +12,17 @@ def register(app: typer.Typer) -> None:
     def backtest(sensitivity: bool = typer.Option(False, help="also run the pre-declared parameter grids"),
                  symbols: str = typer.Option(None, help="comma-separated subset"),
                  setups: str = typer.Option(None, help="comma-separated subset of setups"),
-                 provenance: str = typer.Option(None)) -> None:
+                 provenance: str = typer.Option(None),
+                 start: str = typer.Option(None, help="YYYY-MM-DD first day of signals"),
+                 end: str = typer.Option(None, help="YYYY-MM-DD last day (e.g. the day before a replay day)")) -> None:
         """Walk-forward research: stats book, calibration and tearsheets, with an honest verdict per setup."""
         from dalal.backtest.run import run_research
+        from dalal.config import load_settings
         from dalal.data.store import CandleStore
 
         s = get_settings()
+        if start or end:
+            s = load_settings(overrides={"backtest": {"start": start, "end": end}})
         prov = provenance or s.data.provider
         store = CandleStore(s.data.root_path, prov)
         if prov == "synthetic":

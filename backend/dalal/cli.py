@@ -159,13 +159,18 @@ def download_data(years: int = typer.Option(None), limit: int = typer.Option(0, 
 @app.command()
 def serve(replay: bool = typer.Option(False, help="start a replay immediately"),
           day: str = typer.Option(None), speed: float = typer.Option(None),
-          live: bool = typer.Option(False)) -> None:
+          live: bool = typer.Option(False),
+          demo: bool = typer.Option(False, help="bypass the board gate to see the plumbing (honoured ONLY on synthetic data)"),
+          start_time: str = typer.Option(None, help="replay: fast-forward to HH:MM")) -> None:
     """Run the API/WebSocket server (127.0.0.1 by default)."""
     import uvicorn
 
     from dalal.api.app import create_app
+    from dalal.config import load_settings
 
-    s = get_settings()
+    s = load_settings(overrides={"board": {"demo_bypass_gates": True}}) if demo else get_settings()
+    if demo and s.data.provider != "synthetic":
+        typer.secho("--demo is ignored: the gate bypass only works on synthetic data (DECISIONS D-002).", fg="yellow")
     api = create_app(s)
     if replay or live:
         @api.on_event("startup")
@@ -174,7 +179,7 @@ def serve(replay: bool = typer.Option(False, help="start a replay immediately"),
             if live:
                 await rt.start_live()
             else:
-                await rt.start_replay(date.fromisoformat(day) if day else None, speed)
+                await rt.start_replay(date.fromisoformat(day) if day else None, speed, start_time)
 
     uvicorn.run(api, host=s.api.host, port=s.api.port, log_level="warning")
 

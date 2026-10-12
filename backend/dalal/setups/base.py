@@ -95,7 +95,9 @@ class Setup:
                 stop = _round_tick(stop, s.tick, up=side == SHORT)
                 risk = (trig - stop) * sign
                 px = s.F["c"]
-                reg_ok = np.isin(s.regime, list(self.regimes[side]))
+                lut = np.zeros(8, dtype=bool)
+                lut[[r + 1 for r in self.regimes[side]]] = True
+                reg_ok = lut[np.clip(s.regime, -1, 6) + 1]
                 ok = mask & time_ok & reg_ok & s.F["visible"] & (risk >= np.maximum(self.min_risk_pct * px, 2 * s.tick)) \
                     & (risk <= self.max_risk_pct * px)
                 r1, r2 = self.params.get("t1_r", 1.0), self.params.get("t2_r", 2.0)
