@@ -205,6 +205,72 @@ Source: [lightweight-charts README 5.0.7](https://unpkg.com/lightweight-charts@5
 
 ---
 
+## Later decisions (phases 3–6)
+
+### D-040 Net-beta cap in risk units
+
+Each idea is sized to the same ₹ risk, so the board's net beta is measured as **Σ side×β, with
+each idea counting as one unit of risk**. It is capped at ±5 (`board.max_net_beta`). A
+candidate that would push past the cap is accepted only if it *reduces* |net beta|.
+
+We first tried a cap on notional/capital (1.5×). With MIS-sized positions that allowed only one
+or two same-direction ideas, so it was replaced.
+
+### D-041 Meta-model ship gate
+
+The LightGBM meta-labeller is trained on purged, embargoed walk-forward folds, the same folds
+the rule book uses. Within each training window, isotonic calibration is fit on the latest
+20 %. It **ships only if, on the same OOS instances, Brier is ≥ 1 % better AND AUC is higher**
+than the calibrated rule book.
+
+- **If it ships**, it sets the per-instance probability, with the CI width borrowed from the
+  bucket's Wilson interval. It also supplies the thesis drivers: exact TreeSHAP via LightGBM
+  `pred_contrib`.
+- **What it cannot change**: the gate. The gate always uses the bucket's OOS evidence.
+- **When it doesn't ship**, the model files are removed, so a stale model can never load.
+
+Synthetic results:
+
+| Dataset | Brier (meta vs rule) | AUC (meta vs rule) | Ships? |
+|---|---|---|---|
+| Planted edge | 0.2308 vs 0.2342 | 0.637 vs 0.615 | **Ships** |
+| Null | 0.2458 vs 0.2481 (< 1 % better) | — | **Does not ship** |
+
+### D-042 Futures OI
+
+- Positioning = sign(futures price change vs prev close) × sign(OI change vs prev close), with
+  thresholds |ΔP| > 0.1 % and |ΔOI| > 1 %.
+- Live: from Upstox `full`-mode ticks on the near-month future.
+- Research: from stored futures bars.
+- History of *expired* contracts would need Upstox's expired-instrument API, which isn't wired
+  into `download-data` yet. Until it is, real OI history only starts when you begin storing.
+- The `oi_confirm` setup stays **disabled** until it has N ≥ 200 OOS instances.
+
+### D-043 In-sample replays
+
+Replaying a stored day that falls inside the stats book's data range shows probabilities that
+are in-sample for that day. The UI says so (amber banner). For a clean out-of-sample replay, run
+`dalal backtest --end <day before>`. "Similar past instances" are always restricted to days
+before the idea's day.
+
+### D-044 UI stack details
+
+- **shadcn/ui**: its components are copy-paste Tailwind/Radix code, and the registry CLI isn't
+  reachable from the build sandbox. We hand-wrote the few primitives we need in the same style.
+- **Lightweight Charts**: 4.2.3. Its `attributionLogo` covers the licence's link requirement
+  (D-032), and the footer and drawer credit TradingView.
+- **Fonts**: bundled locally via @fontsource, so the terminal works offline.
+
+### D-045 Docker binding
+
+- Inside the container the API binds 0.0.0.0 (`DALAL_API_HOST`). Compose publishes it on
+  **127.0.0.1:8000 only**.
+- Natively, the server binds 127.0.0.1.
+- The Docker image could not be built in the sandbox (no Docker daemon). `docker compose config`
+  validates.
+
+---
+
 ## Runtime verification (`make verify`)
 
 On the owner's machine, `dalal verify` does three things:

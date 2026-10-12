@@ -20,9 +20,10 @@ from dalal.backtest.simulate import simulate, slippage
 from dalal.config import Settings
 from dalal.data.models import Instrument
 from dalal.data.store import CandleStore
-from dalal.features.panel import N1, bar5_close_hhmm, hhmm_to_minute
+from dalal.features.panel import N1, bar5_close_hhmm, hhmm_to_minute, panel_from_1m
 from dalal.pipeline import (
     MarketBuilder,
+    attach_oi,
     eligibility,
     load_index_panels,
     setup_context,
@@ -85,6 +86,9 @@ class Research:
         for k, inst in enumerate(stocks):
             p, ctx, F = symbol_features(inst.key, self._read(inst.key), idx)
             sc = setup_context(inst, p, ctx, F, mkt, idx)
+            if inst.futures_key and self.store.has(inst.futures_key):
+                fp = panel_from_1m(inst.futures_key, self._read(inst.futures_key))
+                attach_oi(F, sc, p.days, fp.days, fp.c1, fp.oi1)
             elig = eligibility(ctx, self.s.universe)
             in_range = np.array([(self.start is None or d >= self.start) and (self.end is None or d <= self.end)
                                  for d in p.days])

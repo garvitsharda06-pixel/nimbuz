@@ -161,6 +161,20 @@ def setup_context(inst: Instrument, p: SymbolPanel, ctx: Features, F: Features, 
                         sector_rank=srank, n_sectors=n_sec, tick=inst.tick_size or 0.05)
 
 
+def attach_oi(F: Features, sc: SetupContext, stock_days: np.ndarray, fut_days: np.ndarray, fut_c1: np.ndarray,
+              fut_oi1: np.ndarray) -> None:
+    """Futures positioning aligned to the stock's days → F['oi_state'|'oi_chg'|'fut_ret'], sc.oi_state."""
+    from dalal.features.oi import oi_frame
+
+    of = oi_frame(fut_c1, fut_oi1)
+    rows = align(fut_days, stock_days)
+    for k in ("fut_ret", "oi_chg"):
+        F[k] = take_rows(of[k], rows)
+    st = take_rows(of["oi_state"].astype(float), rows)
+    F["oi_state"] = np.where(np.isnan(st), 0, st).astype(int)
+    sc.oi_state = F["oi_state"]
+
+
 SNAPSHOT_KEYS = ["rvol_cum", "rvol_bar", "ret_pdc", "ret_open", "rs_mkt_z", "rs_sec_z", "trend15", "rv_ratio"]
 
 
@@ -191,6 +205,14 @@ def snapshot(F: Features, ctx: Features, sc: SetupContext, d: int, t: int, side:
         "pdh": f(ctx["pdh"][d]), "pdl": f(ctx["pdl"][d]), "close": f(c),
         "regime_name": REGIMES[int(sc.regime[d, t])] if sc.regime[d, t] >= 0 else "UNKNOWN",
     })
+    if "oi_state" in F:
+        from dalal.features.oi import OI_TEXT
+
+        stt = int(F["oi_state"][d, t])
+        oi_c, fr = f(F["oi_chg"][d, t]), f(F["fut_ret"][d, t])
+        out["oi_chg"], out["fut_ret"] = oi_c, fr
+        out["oi_state_text"] = (f"{OI_TEXT[stt]} (OI {oi_c * 100:+.1f}%, price {fr * 100:+.2f}%)"
+                                if stt and np.isfinite(oi_c) and np.isfinite(fr) else "—")
     return out
 
 

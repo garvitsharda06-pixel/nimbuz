@@ -26,7 +26,7 @@ export function Market() {
     xAxis: { type: "category", data: (m?.breadth_series ?? []).map((_, i) => i), ...axisStyle, axisLabel: { show: false } },
     yAxis: { type: "value", min: 0, max: 100, ...axisStyle },
     series: [{ type: "line", data: m?.breadth_series ?? [], smooth: true, showSymbol: false, lineStyle: { color: "#60a5fa", width: 1.5 },
-      markLine: { silent: true, symbol: "none", lineStyle: { color: "#3f4654" }, data: [{ yAxis: 50 }] } }],
+      markLine: { silent: true, symbol: "none", label: { show: false }, lineStyle: { color: "#3f4654" }, data: [{ yAxis: 50 }] } }],
     tooltip: { trigger: "axis" },
   }), [m?.breadth_series]);
   if (!m || !m.as_of) return <div className="p-4 text-mute">Market data appears after the first completed 5-minute candle of a session.</div>;
@@ -99,12 +99,19 @@ function MoverTable({ rows }: { rows: { symbol: string; sector: string; rvol: nu
 }
 
 function OIPanel() {
+  const rows = useTerminal((s) => s.market?.oi_buildup);
+  if (rows === undefined || rows === null)
+    return <div className="text-[12px] text-mute">No near-month futures OI in this data source, so the panel stays empty rather than inventing numbers. (Upstox <span className="num">full</span> mode carries OI.)</div>;
+  if (!rows.length) return <div className="text-[12px] text-mute">No significant build-up (|OI chg| &gt; 1 % and |price chg| &gt; 0.1 %).</div>;
+  const tone = (s: string) => (s === "Long build-up" || s === "Short covering" ? "text-long" : "text-short");
   return (
-    <div className="text-[12px] text-mute">
-      Futures open-interest analytics (long build-up / short build-up / short covering / long unwinding) need real-time futures
-      OI from the broker feed (Upstox <span className="num">full</span> mode carries OI). This data source provides none, so the
-      panel shows nothing rather than invented numbers.
-    </div>
+    <table className="w-full text-[12px]" data-testid="oi-table">
+      <thead><tr className="text-mute text-left"><th className="font-normal">Symbol</th><th className="font-normal">Positioning</th><th className="font-normal text-right">Fut price chg</th><th className="font-normal text-right">OI chg</th></tr></thead>
+      <tbody>{rows.map((r) => (
+        <tr key={r.symbol} className="border-t hair"><td>{r.symbol} <span className="text-mute text-[10.5px]">{r.sector}</span></td>
+          <td className={tone(r.state)}>{r.state}</td><td className="num text-right">{pctRaw(r.fut_ret_pct)}</td><td className="num text-right">{pctRaw(r.oi_chg_pct, 1)}</td></tr>
+      ))}</tbody>
+    </table>
   );
 }
 

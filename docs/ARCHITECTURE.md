@@ -41,15 +41,16 @@ backend/
     log.py             structured logging (secrets redacted)
     data/              models, provider protocol, upstox, replay, synthetic, store,
                        universe, quality, reference, download, candles
-    features/          causal indicators (VWAP, σ-bands, EMA, ATR, RVOL, OR, PDH/PDL, RS, gap)
+    pipeline.py        the ONE signal pipeline shared by research and live (indices → breadth → regime → RS → setups)
+    features/          day panels; causal indicators (VWAP, σ-bands, EMA, ATR, RVOL, OR, PDH/PDL, RS, gap); futures OI
     regime/            index + breadth + VIX regime classifier
     setups/            one module per setup + registry
     backtest/          engine (triple barrier on 1m), costs, slippage, walk-forward,
                        robustness (sensitivity, Monte Carlo, deflated Sharpe), tearsheet
     scoring/           stats (Wilson, EV), calibration, statsbook, board (portfolio,
-                       hysteresis), explain (thesis bullets), metamodel, similar
+                       hysteresis), candidates, explain (thesis bullets), metamodel (LightGBM + TreeSHAP), similar
     risk/              sizing, guardrails, blackouts
-    live/              engine, tracker, bus
+    live/              engine (stacked per-candle batch), tracker (≡ backtester rules), runtime, services, bus
     journal/           SQLite store, resolver, performance analytics
     notify/            telegram, morning note, EOD report
     api/               FastAPI app + WebSocket

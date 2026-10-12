@@ -76,8 +76,12 @@ def build_instruments(p: SynthParams, rng: np.random.Generator) -> tuple[list[In
             tv_cr = float(rng.uniform(10, 40))      # a few illiquid names to exercise the liquidity filter
         adv = tv_cr * 1e7 / price
         lot = int(max(1, round(600000 / price / 25.0)) * 25)
+        fkey = f"SYN_FO|{sym}-FUT"
         insts.append(Instrument(key=key, symbol=sym, name=f"Synthetic {sector} {i}", segment="SYN_EQ",
-                                kind="EQ", lot_size=lot, tick_size=0.05, sector=sector, is_fno=True))
+                                kind="EQ", lot_size=lot, tick_size=0.05, sector=sector, is_fno=True, futures_key=fkey))
+        insts.append(Instrument(key=fkey, symbol=f"{sym} FUT", name=f"Synthetic {sym} near-month future",
+                                segment="SYN_FO", kind="FUT", lot_size=lot, tick_size=0.05, sector=sector,
+                                underlying_key=key))
         params[key] = {
             "price": price,
             "adv": adv,
@@ -133,6 +137,9 @@ def generate(store_root, p: SynthParams, cal: TradingCalendar | None = None) -> 
     c = float(np.clip(p.idio_momentum, 0.0, 0.95))
 
     out: dict[str, list[pd.DataFrame]] = {k: [] for k in keys}
+    fut_keys = [f"SYN_FO|{i.symbol}-FUT" for i in stocks]
+    fut_out: dict[str, list[pd.DataFrame]] = {k: [] for k in fut_keys}
+    oi_lvl = adv * rng.uniform(1.5, 4.0, n)          # open interest (contracts × lot ≈ shares)
     idx_out: dict[str, list[pd.DataFrame]] = {
         str(roles["nifty"]): [], str(roles["vix"]): [], **{v: [] for v in roles["sectors"].values()}
     }
@@ -193,6 +200,18 @@ def generate(store_root, p: SynthParams, cal: TradingCalendar | None = None) -> 
                                         "volume": vol[j], "oi": np.nan}))
         price = cl[:, -1].copy()
 
+        # ---- near-month futures: basis + OI driven by (random, non-predictive) positioning ----
+        basis = rng.uniform(0.0005, 0.004, n)
+        posn = rng.choice([-1.0, 1.0], n)               # +1: new longs dominate, -1: new shorts dominate
+        r_min = np.log(cl / o)
+        oi_path = (oi_lvl * np.exp(rng.normal(0, 0.02, n)))[:, None] * np.exp(
+            np.cumsum(3.0 * posn[:, None] * r_min + rng.normal(0, 0.0007, (n, MINUTES)), axis=1))
+        fo, fh, fl, fc = (_round_tick(x * (1 + basis)[:, None]) for x in (o, h, lo, cl))
+        for j, k in enumerate(fut_keys):
+            fut_out[k].append(pd.DataFrame({"ts": ts, "open": fo[j], "high": fh[j], "low": fl[j], "close": fc[j],
+                                            "volume": np.round(vol[j] * 0.3), "oi": np.round(oi_path[j])}))
+        oi_lvl = oi_path[:, -1]
+
         # ---- indices (minute OHLC from the factor paths) ----
         def _idx_frame(level0: float, r: np.ndarray, gap: float, ts: pd.DatetimeIndex = ts) -> tuple[pd.DataFrame, float]:
             op = level0 * np.exp(gap)
@@ -220,7 +239,7 @@ def generate(store_root, p: SynthParams, cal: TradingCalendar | None = None) -> 
         vix_lvl = float(vp[-1, -1])
 
     store = CandleStore(store_root, "synthetic")
-    for k, frames in {**out, **idx_out}.items():
+    for k, frames in {**out, **fut_out, **idx_out}.items():
         store.write(k, pd.concat(frames, ignore_index=True), merge=False)
     store.write_instruments(insts, roles)
     store.write_manifest({

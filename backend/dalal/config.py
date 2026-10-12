@@ -14,7 +14,7 @@ import yaml
 from pydantic import BaseModel, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(os.environ.get("DALAL_HOME", Path(__file__).resolve().parents[2]))  # Docker sets /app
 CONFIG_DIR = Path(os.environ.get("DALAL_CONFIG_DIR", REPO_ROOT / "config"))
 
 
@@ -198,11 +198,16 @@ class Secrets(BaseSettings):
     telegram_chat_id: str | None = None
 
 
+LOCAL_OVERRIDES = CONFIG_DIR / "settings.local.yaml"   # UI-made changes (e.g. setup toggles); git-ignored
+
+
 def load_settings(path: Path | None = None, overrides: dict[str, Any] | None = None) -> Settings:
     path = path or CONFIG_DIR / "settings.yaml"
     raw: dict[str, Any] = {}
     if path.exists():
         raw = yaml.safe_load(path.read_text()) or {}
+    if path == CONFIG_DIR / "settings.yaml" and LOCAL_OVERRIDES.exists():
+        raw = _deep_merge(raw, yaml.safe_load(LOCAL_OVERRIDES.read_text()) or {})
     if overrides:
         raw = _deep_merge(raw, overrides)
     return Settings.model_validate(raw)
@@ -221,6 +226,11 @@ def _deep_merge(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return load_settings()
+
+
+def save_local_override(patch: dict[str, Any]) -> None:
+    cur = yaml.safe_load(LOCAL_OVERRIDES.read_text()) or {} if LOCAL_OVERRIDES.exists() else {}
+    LOCAL_OVERRIDES.write_text(yaml.safe_dump(_deep_merge(cur, patch), sort_keys=True))
 
 
 def get_secrets() -> Secrets:

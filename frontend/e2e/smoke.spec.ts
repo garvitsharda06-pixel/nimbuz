@@ -27,6 +27,9 @@ test("live board on a replayed day: ideas appear, update and the terminal behave
   await page.getByRole("button", { name: "Market", exact: true }).click();
   await expect(page.getByTestId("treemap")).toBeVisible();
   await expect(page.getByTestId("rrg")).toBeVisible();
+  await expect(page.getByTestId("oi-table")).toBeVisible();          // synthetic futures carry OI
+  await page.getByRole("button", { name: "daily", exact: true }).click();
+  await expect(page.getByTestId("rrg-daily")).toBeVisible();
   await page.getByRole("button", { name: "Board", exact: true }).click();
   // kill switch pauses new ideas
   await page.getByTestId("kill").click();
@@ -60,4 +63,14 @@ test("track record: a fully replayed day is journaled, resolved and reported", a
   await page.getByRole("button", { name: "Notes", exact: true }).click();
   await page.getByText(`${day} · End-of-day · REPLAY`).click();
   await expect(page.getByTestId("note")).toContainText("What fired");
+});
+
+test("strategy lab: honest verdicts, tearsheet and meta-model decision", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Lab", exact: true }).click();
+  await expect(page.getByTestId("verdicts")).toBeVisible();
+  await expect(page.getByText("SYNTHETIC data", { exact: false }).first()).toBeVisible();
+  await expect(page.getByTestId("meta")).toContainText("meta-model");
+  await expect(page.getByTestId("tearsheet")).toBeVisible();
+  await expect(page.getByTestId("equity")).toBeVisible();
 });

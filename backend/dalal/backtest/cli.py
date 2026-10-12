@@ -51,4 +51,6 @@ def register(app: typer.Typer) -> None:
                        f"{f(v['dsr'], '{:.2f}'):>6}")
         for v in summ["verdicts"]:
             typer.echo(f"  · {v['setup']}/{v['side']}: {v['why']}")
+        mm = summ.get("meta_model") or {}
+        typer.echo(f"\nMeta-model (LightGBM, purged walk-forward): {mm.get('reason', '—')}")
         typer.echo(f"\nArtifacts: {store.base / 'research'}")

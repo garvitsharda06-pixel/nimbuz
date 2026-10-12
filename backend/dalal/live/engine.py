@@ -118,6 +118,9 @@ class Engine:
         self.adv = np.full((1, N5), np.nan)
         self.timings: list[float] = []
         self.excluded: dict[str, str] = {}
+        self.meta: Any = None
+        self.fut: dict[str, Series] = {}
+        self.fut_by_key: dict[str, Series] = {}
         self.last_close_m = 0
         self.sparks: dict[str, dict[str, list[float | None]]] = {}
         self.blackouts = load_blackouts()
@@ -144,6 +147,8 @@ class Engine:
         t0 = _time.perf_counter()
         self.day, self.mode = day, mode
         self.book = self.load_book()
+        from dalal.scoring.metamodel import MetaModel
+        self.meta = MetaModel.load(self.store.base / "research") if self.book is not None else None
         self.ideas, self.raw_signals, self.busy = {}, [], {}
         self.rejections = Counter()
         self.breadth = np.full((1, N5), np.nan)
@@ -173,6 +178,7 @@ class Engine:
         events = {r.get("symbol", "").upper() for r in (refs.events(day).data or [])}
         blk = symbol_blackouts(day, self.blackouts)
         self.series, self.excluded = {}, {}
+        self.fut, self.fut_by_key = {}, {}
         for inst in self.rt.instruments:
             if inst.kind != "EQ" or not self.store.has(inst.key):
                 continue
@@ -186,6 +192,12 @@ class Engine:
             elif self.s.universe.exclude_event_risk and (inst.symbol in events or inst.symbol in blk):
                 ser.eligible, self.excluded[inst.symbol] = False, "event risk / blackout"
             self.series[inst.key] = ser
+            fk = inst.futures_key
+            if fk and fk in self.rt.inst_by_key and self.store.has(fk):
+                fser = self._init_series(self.rt.inst_by_key[fk], day, lo, hi, None)
+                if fser is not None:
+                    self.fut[inst.key] = fser
+                    self.fut_by_key[fk] = fser
         self.rt.monitor.expected_keys = {k for k, s in self.series.items() if s.eligible}
         self.guard = {"allowed": False, "reasons": ["waiting for first 5-min candle"]}
         self.market = {"universe": sum(1 for s in self.series.values() if s.eligible), "excluded": len(self.excluded),
@@ -226,7 +238,7 @@ class Engine:
             return []
         msgs: list[dict[str, Any]] = []
         for k, bar in b.bars.items():
-            ser = self.series.get(k) or self._index_by_key(k)
+            ser = self.series.get(k) or self.fut_by_key.get(k) or self._index_by_key(k)
             if ser is None:
                 continue
             m = (bar.ts.astimezone(IST).hour * 60 + bar.ts.astimezone(IST).minute) - OPEN_MIN
@@ -349,9 +361,22 @@ class Engine:
         F["_nifty_ret"] = idx_ret
         F["_score"] = bcast(score[-1].astype(float))
         F["_sector_rank"] = srank
+        if self.fut:                                        # futures positioning (price × OI change)
+            fc = np.full((2 * S, N1), np.nan)
+            foi = np.full((2 * S, N1), np.nan)
+            for si, k in enumerate(keys):
+                fs = self.fut.get(k)
+                if fs is not None:
+                    fc[2 * si], fc[2 * si + 1] = fs.prev["c"], fs.today["c"]
+                    foi[2 * si], foi[2 * si + 1] = fs.prev["oi"], fs.today["oi"]
+            fc[:, close_m:] = np.nan
+            foi[:, close_m:] = np.nan
+            from dalal.features.oi import oi_frame
+            of = oi_frame(fc, foi)
+            F["fut_ret"], F["oi_chg"], F["oi_state"] = of["fut_ret"], of["oi_chg"], of["oi_state"]
         ticks = np.array([[ser.inst.tick_size or 0.05] for ser in sers for _ in (0, 1)])
         sc = SetupContext(F=F, ctx=ctx, regime=regime_st, idx_ret=idx_ret, idx_above_vwap=idx_above, sector_rank=srank,
-                          n_sectors=n_sec, tick=ticks)  # type: ignore[arg-type]
+                          n_sectors=n_sec, tick=ticks, oi_state=F.get("oi_state"))  # type: ignore[arg-type]
         # ---- guardrails ----
         prices = {k: float(ser.today["c"][close_m - 1]) for k, ser in self.series.items()
                   if close_m - 1 < N1 and np.isfinite(ser.today["c"][close_m - 1])}
@@ -378,7 +403,7 @@ class Engine:
                                    close_ts, float(ss.trigger[row, t]), float(ss.stop[row, t]), float(ss.t1[row, t]),
                                    float(ss.t2[row, t]), regime_name,
                                    st.invalidation(side, float(ss.stop[row, t]), snap), snap, ser.beta, ser.inst.lot_size)
-                    idea, why = make_candidate(rs, self.book, self.s, self.rt.provenance, self.mode, n_sec)
+                    idea, why = make_candidate(rs, self.book, self.s, self.rt.provenance, self.mode, n_sec, self.meta)
                     self.busy[bk] = valid_min
                     if idea is None:
                         self.rejections[reason_key(why.split(";")[0])] += 1
@@ -471,6 +496,7 @@ class Engine:
             "resolved": [self.card(i) for i in resolved[:30]],
             "guard": self.guard, "rejections": dict(self.rejections.most_common(8)),
             "raw_signals_today": len(self.raw_signals),
+            "meta_model": None if self.meta is None else self.meta.report.get("reason"),
             "book": None if b is None else {"provenance": b.provenance, "created": b.created,
                                             "data_range": list(b.data_range),
                                             "in_sample_day": bool(self.day is not None and b.data_range[1] and
@@ -509,6 +535,15 @@ class Engine:
                                "chg_pct": round(float(r) * 100, 2), "ltp": round(float(F["c"][row, t]), 2),
                                "rs_z": None if not np.isfinite(z) else round(float(z), 2)})
         movers.sort(key=lambda x: -x["rvol"])
+        oi_rows: list[dict[str, Any]] = []
+        if "oi_state" in F:
+            from dalal.features.oi import OI_TEXT
+            for _key, (row, ser) in feats.items():
+                stt, oc, fr = int(F["oi_state"][row, t]), F["oi_chg"][row, t], F["fut_ret"][row, t]
+                if stt and np.isfinite(oc) and np.isfinite(fr):
+                    oi_rows.append({"symbol": ser.inst.symbol, "sector": ser.inst.sector, "state": OI_TEXT[stt],
+                                    "oi_chg_pct": round(float(oc) * 100, 2), "fut_ret_pct": round(float(fr) * 100, 2)})
+            oi_rows.sort(key=lambda x: -abs(x["oi_chg_pct"]))
         adv = round(float(self.adv[0, t]) * 100) if np.isfinite(self.adv[0, t]) else None
         self.market.update({
             "as_of": bar5_close_hhmm(t), "regime": regime, "regime_score": None if not np.isfinite(score) else score,
@@ -523,6 +558,7 @@ class Engine:
                                                                       idxF["nifty"].F["ret_pdc"][-1, : t + 1], strict=True)]
                                  for r, s in idxF.items() if r.startswith("sector:")},
             "volume_shockers": movers[:10],
+            "oi_buildup": oi_rows[:15] if "oi_state" in F else None,
             "rs_leaders": sorted([m for m in movers if m["rs_z"] is not None], key=lambda x: -x["rs_z"])[:5],
             "rs_laggards": sorted([m for m in movers if m["rs_z"] is not None], key=lambda x: x["rs_z"])[:5],
         })

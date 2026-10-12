@@ -3,6 +3,8 @@
 The owner asked us to proceed without stopping, so each phase ends with a report section in
 `docs/PHASES.md` and a commit. There is no approval gate between phases.
 
+**Status: phases 0–6 done (see docs/PHASES.md). Phase 7 not started, by design.**
+
 | Phase | Scope (this repo) | Acceptance check we can run here | Needs owner's machine |
 |---|---|---|---|
 | 0 Plan | Verify docs (D-010…D-032), answer §14 with defaults, architecture, CLAUDE.md | Docs present | Confirm D-001 defaults |

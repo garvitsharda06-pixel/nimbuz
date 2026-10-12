@@ -1,7 +1,7 @@
 # Dalal Desk tasks. Backend venv lives in backend/.venv
 DALAL := backend/.venv/bin/dalal
 
-.PHONY: setup test lint synth check-data verify download-data backtest replay live serve ui build-ui e2e
+.PHONY: setup test lint synth synth-edge check-data verify download-data backtest replay live serve ui build-ui e2e
 
 setup:
 	cd backend && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -e ".[dev]"
@@ -17,6 +17,9 @@ lint:
 
 synth:            ## SYNTHETIC dataset for plumbing/demo (never market data)
 	$(DALAL) synth
+
+synth-edge:       ## SYNTHETIC dataset with a planted momentum edge (known-answer demo)
+	$(DALAL) synth --momentum 0.6 --days 500
 
 check-data:
 	$(DALAL) check-data

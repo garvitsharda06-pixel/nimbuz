@@ -160,7 +160,9 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
     def debug_page() -> FileResponse:
         return FileResponse(STATIC / "debug.html")
 
-    dist = Path(__file__).resolve().parents[3] / "frontend" / "dist"
+    import os
+
+    dist = Path(os.environ.get("DALAL_UI_DIST", Path(__file__).resolve().parents[3] / "frontend" / "dist"))
     if dist.exists():
         from fastapi.staticfiles import StaticFiles
         app.mount("/", StaticFiles(directory=dist, html=True), name="ui")

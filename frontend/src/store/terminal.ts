@@ -40,7 +40,7 @@ export const useTerminal = create<TerminalState>((set, get) => ({
   search: "",
   lastError: null,
   set: (p) => set(p),
-  pushToast: (t) => set({ toasts: [t, ...get().toasts].slice(0, 5) }),
+  pushToast: (t) => set({ toasts: [t, ...get().toasts].slice(0, 3) }),
   dropToast: (id) => set({ toasts: get().toasts.filter((x) => x.id !== id) }),
   applyPrices: (d) => {
     const cur = get().prices;

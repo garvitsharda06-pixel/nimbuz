@@ -7,11 +7,11 @@ export function Toasts() {
   const { toasts, dropToast, set } = useTerminal();
   useEffect(() => {
     if (!toasts.length) return;
-    const t = setTimeout(() => dropToast(toasts[toasts.length - 1].id), 8000);
+    const t = setTimeout(() => dropToast(toasts[toasts.length - 1].id), 6000);
     return () => clearTimeout(t);
   }, [toasts, dropToast]);
   return (
-    <div className="fixed top-24 right-3 z-50 flex flex-col gap-2 w-[300px] max-w-[calc(100vw-24px)]" data-testid="toasts">
+    <div className="fixed top-24 right-3 z-30 flex flex-col gap-2 w-[300px] max-w-[calc(100vw-24px)]" data-testid="toasts">
       {toasts.map((t) => {
         const long = t.card.side === "long";
         return (

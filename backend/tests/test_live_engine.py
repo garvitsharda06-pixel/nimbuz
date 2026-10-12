@@ -9,9 +9,17 @@ import numpy as np
 import pytest
 
 from dalal.config import load_settings
+from dalal.features.panel import panel_from_1m
 from dalal.live.engine import attach_engine
 from dalal.live.runtime import Runtime
-from dalal.pipeline import MarketBuilder, eligibility, load_index_panels, setup_context, symbol_features
+from dalal.pipeline import (
+    MarketBuilder,
+    attach_oi,
+    eligibility,
+    load_index_panels,
+    setup_context,
+    symbol_features,
+)
 from dalal.setups.library import build_setups
 
 
@@ -30,6 +38,9 @@ def _research_signals(settings, store, day):
     out = set()
     for inst, p, ctx, F, el in cache.values():
         sc = setup_context(inst, p, ctx, F, mkt, idx)
+        if inst.futures_key and store.has(inst.futures_key):
+            fp = panel_from_1m(inst.futures_key, store.read(inst.futures_key))
+            attach_oi(F, sc, p.days, fp.days, fp.c1, fp.oi1)
         if day not in list(p.days):
             continue
         d = list(p.days).index(day)
@@ -62,7 +73,8 @@ async def _replay(settings, day):
 @pytest.fixture(scope="module")
 def replayed(syn_root):
     s = load_settings(overrides={"data": {"root": str(syn_root), "provider": "synthetic"},
-                                 "board": {"demo_bypass_gates": True}})
+                                 "board": {"demo_bypass_gates": True},
+                                 "setups": {"oi_confirm": {"enabled": True}}})     # parity covers futures OI too
     from dalal.backtest.run import run_research
     from dalal.data.store import CandleStore
     store = CandleStore(syn_root, "synthetic")

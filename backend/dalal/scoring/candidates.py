@@ -44,7 +44,7 @@ def gate_bypass_allowed(settings: Settings, provenance: str) -> bool:
 
 
 def make_candidate(sig: RawSignal, book: StatsBook | None, settings: Settings, provenance: str, mode: str,
-                   n_sectors: int) -> tuple[Idea | None, str]:
+                   n_sectors: int, meta: Any | None = None) -> tuple[Idea | None, str]:
     bypass = gate_bypass_allowed(settings, provenance)
     entry = book.lookup(sig.setup, sig.side, sig.regime, settings.board.gate.min_n) if book else None
     if entry is None:
@@ -85,4 +85,42 @@ def make_candidate(sig: RawSignal, book: StatsBook | None, settings: Settings, p
         live_hit=entry.live_hit, live_n=entry.live_n, stats_level=entry.regime,
         snapshot={k: (v if not (isinstance(v, float) and not np.isfinite(v)) else None) for k, v in sig.snapshot.items()},
     )
+    if meta is not None:
+        why = apply_meta(idea, sig, entry, meta, settings, bypass, n_sectors)
+        if why:
+            return None, why
     return idea, ""
+
+
+def apply_meta(idea: Idea, sig: RawSignal, entry: Any, meta: Any, settings: Settings, bypass: bool,
+               n_sectors: int) -> str:
+    """Per-instance probability from the shipped meta-model; CI width from the bucket's evidence;
+    thesis drivers from exact TreeSHAP contributions. Returns a rejection reason or ''."""
+    import pandas as pd
+
+    from dalal.regime.classifier import REGIMES
+    from dalal.scoring.metamodel import shap_bullets
+    from dalal.scoring.stats import ev
+
+    row = {**sig.snapshot, "t": sig.t, "rr1": idea.rr1, "setup": sig.setup, "side": sig.side,
+           "regime": REGIMES.index(sig.regime) if sig.regime in REGIMES else -1}
+    p, drivers = meta.predict(pd.DataFrame([row]))
+    half_lo = max(0.0, entry.hit - entry.ci_lo) if np.isfinite(entry.ci_lo) else 0.05
+    half_hi = max(0.0, entry.ci_hi - entry.hit) if np.isfinite(entry.ci_hi) else 0.05
+    pm = float(p[0])
+    idea.p, idea.ci_lo, idea.ci_hi = pm, max(0.0, pm - half_lo), min(1.0, pm + half_hi)
+    w = entry.win_r if np.isfinite(entry.win_r) else 0.0
+    lr = entry.loss_r if np.isfinite(entry.loss_r) else 0.0
+    idea.cons_ev = ev(idea.ci_lo, w, lr)
+    g = settings.board.grades
+    idea.grade = grade_for(idea.cons_ev, g.a_plus, g.a)
+    bullets = shap_bullets(drivers[0])
+    if bullets:
+        idea.thesis = [idea.thesis[0], *bullets][:3]
+        if len(idea.thesis) < 3:
+            idea.thesis = thesis(sig.setup, sig.side, sig.snapshot, sig.regime, n_sectors, idea.thesis[1:])
+    idea.snapshot["p_model"] = "lightgbm-meta"
+    idea.snapshot["p_rule"] = entry.p_cal
+    if not idea.cons_ev > 0 and not bypass:
+        return f"meta-model conservative EV {idea.cons_ev:+.3f}R ≤ 0"
+    return ""

@@ -1,0 +1,19 @@
+# One command: `docker compose up --build` → http://127.0.0.1:8000
+# The port is published on 127.0.0.1 ONLY (never the open internet). For phone access use
+# Tailscale (see README), not port forwarding.
+services:
+  dalal:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DALAL_API_HOST: 0.0.0.0          # container-internal; published on localhost below
+    volumes:
+      - ./data:/app/data               # market data store, research artefacts, journal
+      - ./config:/app/config           # settings.yaml, costs.yaml, calendar.yaml, reference CSVs
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped

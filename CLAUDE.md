@@ -25,12 +25,23 @@ Architecture: `docs/ARCHITECTURE.md`. Phase reports: `docs/PHASES.md`.
 ```
 make setup      # backend venv + frontend deps
 make test       # pytest (incl. look-ahead/determinism) + ruff + mypy
-make synth      # generate SYNTHETIC dataset for plumbing/demo
+make synth      # generate SYNTHETIC dataset for plumbing/demo (synth-edge: planted edge for known-answer demo)
 make backtest   # walk-forward research → statsbook + tearsheets
 make replay     # serve API + replay a stored day
 make live       # live mode (needs UPSTOX_ANALYTICS_TOKEN)
-make ui         # frontend dev server
+make ui         # frontend dev server (proxies /api and /ws to :8000)
+make e2e        # Playwright smoke tests (after make build-ui)
+dalal serve --demo   # gate bypass for watching the plumbing: honoured ONLY on synthetic data
 ```
+
+## Invariants to keep (tests enforce them)
+
+- Research and live share `dalal/pipeline.py` + `features/` + `setups/`. Replay signals must
+  equal research signals (`tests/test_live_engine.py`).
+- `live/tracker.py` must reproduce `backtest/simulate.py` exactly (`tests/test_tracker.py`).
+- Features use fixed-length windows (no dependence on loaded history length).
+- Notes and any prose may contain only numbers present in the facts (`numbers_subset_check`).
+- The meta-model ships only if it beats the rule book OOS (Brier ≥1 % better AND higher AUC).
 
 ## Style
 

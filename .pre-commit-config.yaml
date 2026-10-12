@@ -1,0 +1,26 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff
+        entry: backend/.venv/bin/ruff check backend/dalal backend/tests
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: mypy
+        name: mypy
+        entry: bash -c "cd backend && .venv/bin/mypy dalal"
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: tsc
+        name: tsc
+        entry: bash -c "cd frontend && npx tsc -b"
+        language: system
+        pass_filenames: false
+        files: ^frontend/
+      - id: no-secrets
+        name: no .env committed
+        entry: bash -c 'git diff --cached --name-only | grep -E "(^|/)\.env$" && exit 1 || exit 0'
+        language: system
+        pass_filenames: false

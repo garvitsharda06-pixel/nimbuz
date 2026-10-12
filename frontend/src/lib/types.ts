@@ -92,6 +92,7 @@ export interface MarketMsg {
   vix?: Quote | null;
   usdinr?: Quote | null;
   sector_rs_series?: Record<string, (number | null)[]>;
+  oi_buildup?: { symbol: string; sector: string; state: string; oi_chg_pct: number; fut_ret_pct: number }[] | null;
   sectors?: { name: string; ret_pct: number | null; rank: number | null; ret_open_pct: number | null }[];
   volume_shockers?: { symbol: string; sector: string; rvol: number; chg_pct: number; ltp: number; rs_z: number | null }[];
   rs_leaders?: { symbol: string; sector: string; rvol: number; chg_pct: number; ltp: number; rs_z: number | null }[];

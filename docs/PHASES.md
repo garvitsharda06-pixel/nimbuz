@@ -393,3 +393,75 @@ backend/.venv/bin/dalal serve --demo        # open http://127.0.0.1:8000, pick a
 **Honest note**: on the synthetic demo the gate-bypassed ideas lost money (−6.4 R on one replayed
 day). That is the expected result for setups that fail the gate, and it's exactly why the gate
 exists.
+
+## Phase 6: Depth (done)
+
+**Built**
+- **Remaining setups**: all eight in §8.2 have been live since Phase 2 (PDH/PDL retest,
+  gap-and-go, gap-fade, RS leader/laggard, VWAP ±2σ mean reversion, OI confirmation). Each is
+  backtested separately and gated.
+- **LightGBM meta-model** (`scoring/metamodel.py`):
+  - meta-labelling on rule-setup instances, with side-oriented features
+  - purged, embargoed walk-forward folds (the same folds the rule book uses)
+  - isotonic calibration on the latest 20 % of each training window
+  - **ships only if OOS Brier is ≥ 1 % better AND AUC is higher** than the calibrated rule book
+  - when shipped, it sets per-instance probabilities and supplies **exact TreeSHAP thesis
+    drivers**
+  - the gate always stays evidence-based (bucket N, CI, stability)
+  - a non-shipped model is never loaded
+- **Futures OI analytics** (`features/oi.py`):
+  - price × OI change classification: long build-up, short build-up, short covering, long
+    unwinding
+  - computed causally from near-month futures bars (synthetic futures now carry OI; Upstox
+    `full` mode carries live OI)
+  - shown in thesis bullets, the drawer and the Market "F&O OI build-up" table
+  - feeds the (disabled) OI-confirmation setup
+  - live/research parity covers it
+- **Sector rotation**: intraday (sector − Nifty spread vs its 30-min change) and daily
+  JdK-style RRG with 5-day tails (`/api/rotation/daily`, never peeks past a replay day).
+- **Strategy Lab**:
+  - verdict table with trial counts and DSR
+  - forward-chained calibration and meta-model decision
+  - per-setup tearsheet: IS vs OOS, regime buckets with gate reasons, OOS equity in R and ₹
+    with drawdown, walk-forward folds (expectancy, realised vs predicted hit), calibration plot,
+    MAE/MFE, sensitivity heatmap, Monte Carlo, breakdowns
+  - enable/disable setups (persisted to `config/settings.local.yaml`)
+- **Ops**:
+  - `Dockerfile` + `docker-compose.yml` (published on 127.0.0.1 only; validated with `docker
+    compose config`; the image couldn't be built here, no daemon)
+  - `.env.example`, `.pre-commit-config.yaml` (ruff, mypy, tsc, no-.env guard)
+  - README; `make synth-edge`
+
+**Results (synthetic)**
+- **Null dataset** (40 stocks + futures × 750 days, 63k OOS instances): **every setup is NO
+  EDGE or INSUFFICIENT DATA**, so the board stays empty without the demo bypass.
+  - The meta-model ships by a hair (Brier 0.2460 vs 0.2485, AUC 0.554 vs 0.518). It predicts
+    *probability* better (stop distance, time of day), but that doesn't turn negative
+    expectancy positive. The gate still holds everything back.
+- **Planted-edge dataset**: ORB and RS setups pass the gate; the meta-model ships (Brier 0.2308
+  vs 0.2342, AUC 0.637 vs 0.615) and lifts top-30 % selection expectancy from +0.21 R to
+  +0.27 R. **On out-of-sample replay days the board shows real, non-bypassed ideas** (test).
+
+**Tests**:
+- **99 backend tests pass.** New this phase:
+  - meta-model ship gate
+  - SHAP text
+  - end-to-end planted edge → real ideas on OOS days
+  - OI classification and causality
+  - parity extended to OI confirmation
+- **4 Playwright tests pass**: board/drawer/keyboard/kill switch; mobile; full-day track record
+  → Performance → EOD note; Strategy Lab.
+- `ruff`, `mypy` and `tsc` are clean.
+
+**Known gaps / next steps (honest list)**
+1. **Real data verdict pending**: run `make verify`, `make download-data`, `make backtest`.
+   Expect most setups to show no edge after costs; that is the normal finding.
+2. OI history for expired contracts isn't downloaded yet (Upstox expired-instrument API), so
+   the OI-confirmation setup can't be validated on history until then.
+3. Event, ASM/GSM and ban-list *history* isn't available, so the backtest universe only uses
+   liquidity and price filters.
+4. Reference-data URLs (NSE archives, niftyindices) are unverified from the sandbox and fail
+   soft.
+5. US futures, GIFT Nifty and FII/DII sources are deliberately "—" (no permitted, reliable
+   source). USD/INR via Upstox currency futures isn't wired yet (shows "—").
+6. Phase 7 (orders) is not built, by design.

@@ -28,3 +28,6 @@ frontend/playwright-report/
 
 # os
 .DS_Store
+
+# local UI overrides
+config/settings.local.yaml

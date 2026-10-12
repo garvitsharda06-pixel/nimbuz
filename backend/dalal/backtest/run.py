@@ -19,6 +19,7 @@ from dalal.clock import IST
 from dalal.config import Settings
 from dalal.data.store import CandleStore
 from dalal.scoring.calibration import forward_calibration
+from dalal.scoring.metamodel import MetaModel, walk_forward_meta
 from dalal.scoring.statsbook import StatsBook, build_statsbook
 from dalal.setups.library import SETUP_BY_NAME, build_setups
 
@@ -102,6 +103,21 @@ def run_research(settings: Settings, store: CandleStore, sensitivity: bool = Fal
     book = build_statsbook(wf, sc, settings.board, store.provenance, settings.config_hash(), res.days,
                            {k: v.get("dsr", float("nan")) for k, v in dsr.items()}, cal)
     book.save(out / "statsbook.json")
+
+    # ---- Step 2: LightGBM meta-model; ships only if it beats the rule book out-of-sample ----
+    meta_rep: dict[str, Any] = {"shipped": False, "reason": "not run"}
+    for f in ("metamodel.txt", "metamodel.json"):
+        (out / f).unlink(missing_ok=True)                 # never leave a stale shipped model behind
+    if (wf["fold"] >= 0).sum() >= 500:
+        p_meta, rep = walk_forward_meta(wf, bt.wf_train_months, bt.wf_test_months, bt.wf_embargo_days)
+        wf["p_meta_oos"] = p_meta
+        meta_rep = rep.__dict__
+        if rep.shipped:
+            MetaModel.train(wf, rep).save(out)
+        else:
+            (out / "metamodel.json").write_text(json.dumps({"report": _clean(meta_rep)}, indent=1))
+    else:
+        meta_rep["reason"] = f"does NOT ship: only {(wf['fold'] >= 0).sum()} OOS instances (< 500)"
     wf.to_parquet(out / "instances.parquet", index=False)
 
     ts_dir = out / "tearsheets"
@@ -132,7 +148,7 @@ def run_research(settings: Settings, store: CandleStore, sensitivity: bool = Fal
         "folds": [{"k": f.k, "train_end": str(f.train_end), "test_start": str(f.test_start),
                    "test_end": str(f.test_end)} for f in folds],
         "calibration": {k: v for k, v in cal.items() if k not in ("p_cal", "index")},
-        "verdicts": verdicts, "trials": ledger, "sensitivity_run": sensitivity,
+        "verdicts": verdicts, "trials": ledger, "sensitivity_run": sensitivity, "meta_model": meta_rep,
     })
     (out / "summary.json").write_text(json.dumps(summary, indent=1, default=str))
     return summary

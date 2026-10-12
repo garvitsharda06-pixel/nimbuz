@@ -181,7 +181,10 @@ def serve(replay: bool = typer.Option(False, help="start a replay immediately"),
             else:
                 await rt.start_replay(date.fromisoformat(day) if day else None, speed, start_time)
 
-    uvicorn.run(api, host=s.api.host, port=s.api.port, log_level="warning")
+    import os
+
+    host = os.environ.get("DALAL_API_HOST", s.api.host)      # docker-compose sets 0.0.0.0 inside the container
+    uvicorn.run(api, host=host, port=s.api.port, log_level="warning")
 
 
 def _register_research_commands() -> None:

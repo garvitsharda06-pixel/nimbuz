@@ -55,7 +55,7 @@ class Runtime:
         return self.store.days(nifty) if nifty else []
 
     def stream_keys(self) -> list[str]:
-        keys = [i.key for i in self.instruments if i.kind in ("EQ", "INDEX")]
+        keys = [i.key for i in self.instruments if i.kind in ("EQ", "INDEX", "FUT")]
         return [k for k in keys if self.store.has(k)] if self.mode == "REPLAY" else keys
 
     async def start_replay(self, day: date | None = None, speed: float | None = None,
@@ -74,7 +74,7 @@ class Runtime:
                                    speed=self.settings.replay.speed if speed is None else speed,
                                    start_time=start_time)
         self.monitor = FeedMonitor(self.settings.data.stale_seconds, self.settings.data.max_clock_drift_ms)
-        self.monitor.expected_keys = {k for k in self.stream_keys() if self.inst_by_key[k].kind == "EQ"}
+        self.monitor.expected_keys = {k for k in self.stream_keys() if self.inst_by_key[k].kind == "EQ"}  # engine narrows
         if self.engine is not None:
             self.engine.start_day(day, mode="REPLAY")
         if self.on_session_start is not None:

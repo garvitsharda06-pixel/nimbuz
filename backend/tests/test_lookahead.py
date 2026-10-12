@@ -120,3 +120,24 @@ def test_signals_ignore_future(syn_store, settings):
     for k in s0:
         assert _eq(s0[k][0], s1[k][0]), k
         assert _eq(np.where(s0[k][0], s0[k][1], np.nan), np.where(s1[k][0], s1[k][1], np.nan)), k
+
+
+def test_oi_classification_and_causality():
+    import numpy as np
+
+    from dalal.features.oi import LONG_BUILDUP, LONG_UNWINDING, SHORT_BUILDUP, SHORT_COVERING, oi_frame
+
+    c = np.full((2, 375), 100.0)
+    oi = np.full((2, 375), 1000.0)
+    c[1, :] = 101.0
+    oi[1, :] = 1100.0                                   # price +1 %, OI +10 % → long build-up
+    of = oi_frame(c, oi)
+    assert of["oi_state"][1, 5] == LONG_BUILDUP and abs(of["oi_chg"][1, 5] - 0.1) < 1e-12
+    for px, o, want in [(99.0, 1100.0, SHORT_BUILDUP), (101.0, 900.0, SHORT_COVERING), (99.0, 900.0, LONG_UNWINDING)]:
+        c[1, :], oi[1, :] = px, o
+        assert oi_frame(c, oi)["oi_state"][1, 10] == want
+    c2, oi2 = c.copy(), oi.copy()
+    c2[1, 200:] = 50.0                                  # future minutes must not change earlier bars
+    oi2[1, 200:] = 1.0
+    a, b = oi_frame(c, oi), oi_frame(c2, oi2)
+    assert np.array_equal(a["oi_state"][1, :39], b["oi_state"][1, :39])
