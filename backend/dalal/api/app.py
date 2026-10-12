@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from dalal.config import Settings, get_settings
 from dalal.data.candles import resample
 from dalal.live.runtime import Runtime
+from dalal.log import get_logger
 
 STATIC = Path(__file__).parent / "static"
 _OPTS = orjson.OPT_SERIALIZE_NUMPY | orjson.OPT_NON_STR_KEYS
@@ -69,6 +70,10 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
     if rt.engine is None:
         from dalal.live.engine import attach_engine
         attach_engine(rt)
+    if rt.services is None:
+        from dalal.live.services import Services
+        rt.services = Services(rt)
+        rt.services.attach()
 
     from dalal.api import routes
     routes.register(app, rt)
@@ -147,7 +152,6 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
         except (WebSocketDisconnect, asyncio.CancelledError, RuntimeError):
             pass
         except Exception as e:  # never kill the socket silently
-            from dalal.log import get_logger
             get_logger("ws").error("ws_send_failed", error=repr(e)[:300])
         finally:
             rt.bus.unsubscribe(q)
@@ -161,8 +165,18 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
         from fastapi.staticfiles import StaticFiles
         app.mount("/", StaticFiles(directory=dist, html=True), name="ui")
 
+    @app.on_event("startup")
+    async def _startup() -> None:
+        from dalal.clock import now_ist
+        await rt.services.start()
+        if rt.provenance != "synthetic":
+            n = rt.services.resolve_stale(now_ist().date())
+            if n:
+                get_logger("app").info("resolved_stale_ideas", n=n)
+
     @app.on_event("shutdown")
     async def _shutdown() -> None:
         await rt.stop()
+        await rt.services.stop()
 
     return app

@@ -78,7 +78,7 @@ def register(app: FastAPI, rt: Runtime) -> None:
         }
 
     try:  # phase-5 routes (journal, paper trading, notes) if present
-        from dalal.api import journal_routes  # type: ignore[attr-defined]
+        from dalal.api import journal_routes
         journal_routes.register(app, rt)
     except ImportError:
         pass

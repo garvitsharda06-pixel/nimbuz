@@ -45,6 +45,9 @@ class Runtime:
         self._last_price_push = 0.0
         self._dirty: set[str] = set()
         self.kill_switch = False
+        self.services: Any = None
+        self.on_session_start: Any = None          # callable(day, mode), set by Services
+        self.on_session_end: Any = None
 
     # ------------------------------------------------------------------ control
     def stored_days(self) -> list[date]:
@@ -74,6 +77,8 @@ class Runtime:
         self.monitor.expected_keys = {k for k in self.stream_keys() if self.inst_by_key[k].kind == "EQ"}
         if self.engine is not None:
             self.engine.start_day(day, mode="REPLAY")
+        if self.on_session_start is not None:
+            await asyncio.to_thread(self.on_session_start, day, "REPLAY")
         self.task = asyncio.create_task(self._run())
         self.publish_status()
         return self.status()
@@ -147,6 +152,8 @@ class Runtime:
                 else:
                     self._on_minute(ev)
                 await asyncio.sleep(0)
+            if self.mode == "REPLAY" and self.on_session_end is not None:
+                await asyncio.to_thread(self.on_session_end, self.replay_day, "REPLAY")
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -156,6 +163,8 @@ class Runtime:
             self.monitor.on_disconnect()
             if self.mode == "REPLAY":
                 self.bus.publish({"type": "replay_end", "day": str(self.replay_day)})
+                if isinstance(self.source, ReplaySource) and self.source.stopped:
+                    self.mode = "IDLE"                      # finished: the board stays visible, session is idle
             self.publish_status()
 
     def _on_tick(self, t: Tick) -> None:

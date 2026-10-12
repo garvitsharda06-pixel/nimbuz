@@ -327,3 +327,69 @@ switch, mobile tabs.
 make synth && make backtest && make build-ui
 backend/.venv/bin/dalal serve --demo        # open http://127.0.0.1:8000, pick a day, ▶ Start
 ```
+
+## Phase 5: Track record & alerts (done)
+
+**Built**
+- **Journal** (`journal/db.py`, SQLite at `data/journal.sqlite`):
+  - **every idea ever shown** is logged with its full snapshot: features, model version,
+    config hash, provenance, mode, thesis, invalidation
+  - every status change goes to `events`
+  - ideas are auto-resolved by the tracker (T1/T2/stop/breakeven/time/expired/invalidated/
+    displaced), whether taken or not
+  - on restart, ideas left unresolved from earlier days are resolved from stored bars with the
+    backtester's rules, or marked "outcome unknown" when no bars exist
+- **Paper trading**:
+  - one-click "Take paper trade" in the drawer
+  - taken while WATCHING: mirrors the idea's own fills and costs
+  - taken after the trigger: fills at the then-current price
+  - paper P&L (realised + mark-to-market) feeds the **daily-loss guardrail**
+  - manual entries via API and UI form
+- **Performance** (`journal/performance.py` + Performance page):
+  - forward T1-first rate with Wilson CI vs mean predicted probability, Brier score
+  - **live reliability diagram**
+  - cumulative R and max drawdown
+  - expectancy by setup / regime / time of day
+  - LIVE and REPLAY kept separate; demo ideas excluded unless toggled on
+- **Calibration updates from live data + auto-demotion**:
+  - one-sided binomial test per setup-side: live hit rate vs predicted, needing ≥ 30 live
+    instances, p < 0.01
+  - results written to `research/live_feedback.json`
+  - the engine applies them: cards show the live forward hit rate, and demoted setups are
+    refused
+  - feedback comes from LIVE sessions only
+- **Telegram** (`notify/telegram.py`):
+  - Bot API `sendMessage` to **your own chat ID only**
+  - LIVE sessions only (no replay spam)
+  - rate-limited, failures never break the engine
+  - demo and synthetic messages are labelled
+- **Morning note (08:45) and EOD report (15:45)** (`notify/notes.py`):
+  - APScheduler on trading days; a replay writes a morning note at start and an EOD report at
+    the end
+  - sell-side-style sections:
+    1. overnight/global ("—": no permitted source)
+    2. index levels with PDH/PDL
+    3. regime read (no forecast without overnight data)
+    4. events and universe
+    5. watchlist: RS leaders/laggards, volume shockers, near 20-day highs/lows, NR7
+    6. model status and live record
+  - **every number in the prose is recorded as a display fact.** `numbers_subset_check`
+    proves the text contains no number outside the facts. That is the guard for any future LLM
+    rewording (none is used: no paid API calls).
+- **UI**: Performance & Journal page, Notes page.
+
+**Tests**: 95 backend tests pass, 9 of them new for Phase 5:
+- every shown idea logged and resolved with a snapshot
+- paper trade settles to the idea's outcome
+- EOD written at replay end, containing only computed numbers
+- morning-note number guard, including a negative test with an invented target
+- daily-loss guardrail from paper MTM
+- live calibration and demotion (and no demotion with < 30 live instances)
+- engine applies demotions
+- Telegram labels
+
+3 Playwright tests pass, including a full replayed day → journal → Performance → EOD note.
+
+**Honest note**: on the synthetic demo the gate-bypassed ideas lost money (−6.4 R on one replayed
+day). That is the expected result for setups that fail the gate, and it's exactly why the gate
+exists.

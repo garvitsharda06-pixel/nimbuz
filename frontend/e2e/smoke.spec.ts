@@ -44,3 +44,20 @@ test("mobile: longs and shorts become tabs", async ({ browser }) => {
   await expect(page.getByTestId("col-short")).toBeVisible();
   await ctx.close();
 });
+
+test("track record: a fully replayed day is journaled, resolved and reported", async ({ page, request }) => {
+  const days = (await (await request.get("/api/days")).json()).days as string[];
+  const day = days[days.length - 3];
+  await request.post("/api/replay/start", { data: { date: day, speed: 0 } });
+  await expect.poll(async () => (await (await request.get("/api/status")).json()).mode, { timeout: 90_000 }).toBe("IDLE");
+  const perf = await (await request.get("/api/performance?mode=REPLAY&include_demo=true")).json();
+  expect(perf.n_shown).toBeGreaterThan(0);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Performance", exact: true }).click();
+  await page.getByRole("button", { name: "REPLAY", exact: true }).click();
+  await page.getByLabel("include demo").check();
+  await expect(page.getByTestId("reliability")).toBeVisible();
+  await page.getByRole("button", { name: "Notes", exact: true }).click();
+  await page.getByText(`${day} · End-of-day · REPLAY`).click();
+  await expect(page.getByTestId("note")).toContainText("What fired");
+});

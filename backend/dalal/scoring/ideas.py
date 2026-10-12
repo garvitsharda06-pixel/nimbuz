@@ -67,6 +67,7 @@ class Idea:
     snapshot: dict[str, Any] = field(default_factory=dict)
     events: list[dict[str, Any]] = field(default_factory=list)
     t1_done: bool = False
+    paper: bool = False
 
     @property
     def sign(self) -> float:
