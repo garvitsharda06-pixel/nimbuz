@@ -24,6 +24,7 @@ dependencies = [
   "typer>=0.12",
   "protobuf>=7.35",
   "orjson>=3.10",
+  "tzdata>=2024.1",          # IANA zones for zoneinfo on Windows (no system tz database)
 ]
 
 [project.optional-dependencies]

@@ -29,7 +29,40 @@ Every idea shown is journaled and scored, so the terminal proves or disproves it
 - **"Probability"** means P(T1 before stop before 15:15). It is measured on out-of-sample
   instances, calibrated, with costs included. Read §5 of `docs/BRIEF.md`.
 
-## Quick start (synthetic demo, ~2 minutes)
+## Run it on your own computer
+
+You need **git**, **Node.js 18+** (only to build the UI once) and either
+[uv](https://docs.astral.sh/uv/) (recommended; it fetches Python 3.12 for you) or Python 3.12.
+
+```bash
+git clone https://github.com/garvitsharda06-pixel/nimbuz.git
+cd nimbuz
+git checkout claude/nse-intraday-trading-desk-pnuqhf
+```
+
+Then start it on the port you want:
+
+| System | Command | Open |
+|---|---|---|
+| macOS / Linux / WSL | `./scripts/start.sh 8000` | http://127.0.0.1:8000 |
+| Windows (PowerShell) | `powershell -ExecutionPolicy Bypass -File scripts\start.ps1 -Port 8000` | http://127.0.0.1:8000 |
+| with make | `make start PORT=8000` | http://127.0.0.1:8000 |
+
+- Any free port works, for example `./scripts/start.sh 8080` or `-Port 8080`.
+- If the port is taken, the script stops and tells you.
+- The first run installs everything, builds the UI and generates the **synthetic** demo
+  dataset. It then runs the research once, which takes a few minutes. Later runs start in
+  seconds.
+- In the browser, pick a day in the Replay strip and press **▶ Start**. On synthetic noise the
+  board correctly stays empty, because nothing passes the gate.
+- To watch cards flow anyway, add `--demo`: `./scripts/start.sh 8000 --demo`, or
+  `-Port 8000 -Demo` on Windows, or `make start PORT=8000 ARGS=--demo`. Every bypassed card is
+  marked "GATE BYPASSED".
+- Press Ctrl+C to stop.
+- The server listens on 127.0.0.1 only, so only your computer can reach it. For your phone,
+  see [Phone access](#phone-access).
+
+## Quick start, step by step (synthetic demo)
 
 ```bash
 make setup                 # Python 3.12 venv (uv) + frontend deps
@@ -83,17 +116,18 @@ Live signals are refused on synthetic or delayed data. If the feed goes stale fo
 ## Commands
 
 ```
+make start PORT=8000 [ARGS=--demo]   # install on first run, then serve on that port
 make test          # pytest (look-ahead, parity, determinism, known-answer…) + ruff + mypy
 make e2e           # Playwright smoke tests (needs `make build-ui`; starts the server itself)
 dalal backtest [--sensitivity] [--setups orb,vwap_reclaim] [--start] [--end]
-dalal universe | check-data | verify | download-data | synth | serve [--replay --speed 30 --demo]
+dalal universe | check-data | verify | download-data | synth | serve [--port 8000 --replay --speed 30 --demo]
 ```
 
 ## Phone access
 
 The server binds to `127.0.0.1`. To use it from your phone:
 1. Install [Tailscale](https://tailscale.com) on both devices.
-2. Run `tailscale serve 8000` on the desktop.
+2. Run `tailscale serve 8000` on the desktop (use the port you started on).
 3. Open the tailnet URL on your phone.
 
 Never expose the port to the open internet.
