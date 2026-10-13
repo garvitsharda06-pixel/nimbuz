@@ -161,7 +161,8 @@ def serve(replay: bool = typer.Option(False, help="start a replay immediately"),
           day: str = typer.Option(None), speed: float = typer.Option(None),
           live: bool = typer.Option(False),
           demo: bool = typer.Option(False, help="bypass the board gate to see the plumbing (honoured ONLY on synthetic data)"),
-          start_time: str = typer.Option(None, help="replay: fast-forward to HH:MM")) -> None:
+          start_time: str = typer.Option(None, help="replay: fast-forward to HH:MM"),
+          port: int = typer.Option(None, help="override api.port (host stays 127.0.0.1)")) -> None:
     """Run the API/WebSocket server (127.0.0.1 by default)."""
     import uvicorn
 
@@ -184,7 +185,7 @@ def serve(replay: bool = typer.Option(False, help="start a replay immediately"),
     import os
 
     host = os.environ.get("DALAL_API_HOST", s.api.host)      # docker-compose sets 0.0.0.0 inside the container
-    uvicorn.run(api, host=host, port=s.api.port, log_level="warning")
+    uvicorn.run(api, host=host, port=port or s.api.port, log_level="warning")
 
 
 def _register_research_commands() -> None:
