@@ -3,6 +3,7 @@
 # (a few minutes), then your browser opens the terminal at http://127.0.0.1:8000.
 # Stop it with Ctrl+C or by closing this Terminal window.
 cd "$(dirname "$0")" || exit 1
+[ -f scripts/start.sh ] || { echo "The rest of Dalal Desk is missing next to this file: unzip Dalal-Desk.zip first and run it from the Dalal-Desk folder."; read -r -p "Press Enter to close this window… " _; exit 1; }
 bash ./scripts/start.sh "$@" --open
 status=$?
 echo
