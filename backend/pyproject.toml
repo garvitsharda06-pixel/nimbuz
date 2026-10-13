@@ -6,12 +6,10 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
   "numpy>=2.0",
   "pandas>=2.2",
-  "polars>=1.0",
   "pyarrow>=16",
   "duckdb>=1.1",
   "scikit-learn>=1.5",
   "lightgbm>=4.3",
-  "shap>=0.46",
   "fastapi>=0.115",
   "uvicorn[standard]>=0.30",
   "websockets>=13",

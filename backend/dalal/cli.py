@@ -162,7 +162,8 @@ def serve(replay: bool = typer.Option(False, help="start a replay immediately"),
           live: bool = typer.Option(False),
           demo: bool = typer.Option(False, help="bypass the board gate to see the plumbing (honoured ONLY on synthetic data)"),
           start_time: str = typer.Option(None, help="replay: fast-forward to HH:MM"),
-          port: int = typer.Option(None, help="override api.port (host stays 127.0.0.1)")) -> None:
+          port: int = typer.Option(None, help="override api.port (host stays 127.0.0.1)"),
+          open_browser: bool = typer.Option(False, "--open", help="open the terminal in your web browser once it is up")) -> None:
     """Run the API/WebSocket server (127.0.0.1 by default)."""
     import uvicorn
 
@@ -185,7 +186,29 @@ def serve(replay: bool = typer.Option(False, help="start a replay immediately"),
     import os
 
     host = os.environ.get("DALAL_API_HOST", s.api.host)      # docker-compose sets 0.0.0.0 inside the container
-    uvicorn.run(api, host=host, port=port or s.api.port, log_level="warning")
+    port = port or s.api.port
+    if open_browser:
+        import threading
+        threading.Thread(target=_open_when_up, args=(port,), daemon=True).start()
+    uvicorn.run(api, host=host, port=port, log_level="warning")
+
+
+def _open_when_up(port: int, timeout_s: float = 60.0) -> None:
+    """Wait until the server accepts connections on 127.0.0.1:port, then open the browser once."""
+    import socket
+    import time
+    import webbrowser
+
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                break
+        except OSError:
+            time.sleep(0.3)
+    else:
+        return
+    webbrowser.open(f"http://127.0.0.1:{port}")
 
 
 def _register_research_commands() -> None:

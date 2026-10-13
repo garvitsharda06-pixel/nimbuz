@@ -48,8 +48,10 @@ Then start it on the port you want:
 | Windows (PowerShell) | `powershell -ExecutionPolicy Bypass -File scripts\start.ps1 -Port 8000` | http://127.0.0.1:8000 |
 | with make | `make start PORT=8000` | http://127.0.0.1:8000 |
 
-- Any free port works, for example `./scripts/start.sh 8080` or `-Port 8080`.
-- If the port is taken, the script stops and tells you.
+- With no port given, it uses the first free port from 8000 and prints it.
+- If you name a port, for example `./scripts/start.sh 8080` or `-Port 8080`, it uses exactly
+  that port. If that port is taken, the script stops and tells you.
+- Add `--open` (or `-Open` on Windows) to open your browser when it is ready.
 - The first run installs everything, builds the UI and generates the **synthetic** demo
   dataset. It then runs the research once, which takes a few minutes. Later runs start in
   seconds.
@@ -61,6 +63,21 @@ Then start it on the port you want:
 - Press Ctrl+C to stop.
 - The server listens on 127.0.0.1 only, so only your computer can reach it. For your phone,
   see [Phone access](#phone-access).
+
+### Desktop package (no git or Node needed)
+
+`make package` builds `package/Dalal-Desk.zip`. It contains the committed sources, a prebuilt UI
+and three double-click run files:
+
+| File | Use |
+|---|---|
+| `RUN-mac.command` | double-click in Finder |
+| `RUN-windows.bat` | double-click in Explorer |
+| `RUN-linux.sh` | run in a terminal |
+
+Unzip it, for example to your Desktop, and double-click the run file for your system. It
+starts on the first free port from 8000 and opens your browser. `START-HERE.txt` inside the zip
+covers the first-run prompts, plus the macOS and Windows "unverified app" warnings.
 
 ## Quick start, step by step (synthetic demo)
 

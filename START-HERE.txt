@@ -1,0 +1,37 @@
+DALAL DESK: how to run it on your computer
+==========================================
+
+1. Put this "Dalal-Desk" folder anywhere, for example on your Desktop.
+   It needs about 1.5 GB of free disk space once set up. If your Desktop syncs to
+   iCloud or OneDrive, use a folder that does not sync (for example your home folder).
+
+2. Start it:
+
+   Mac       Double-click  RUN-mac.command
+             If macOS says it "cannot be opened" or "could not be verified", open the
+             Terminal app and type:   bash ~/Desktop/Dalal-Desk/RUN-mac.command
+             (or allow it in System Settings > Privacy & Security > Open Anyway)
+
+   Windows   Double-click  RUN-windows.bat
+             If you see "Windows protected your PC", click "More info", then "Run anyway".
+
+   Linux     In a terminal:   ./RUN-linux.sh
+
+3. The first run sets everything up. It takes a few minutes and needs internet:
+   - If Python 3.12 is missing, it offers to install "uv" (from astral.sh), which downloads
+     Python 3.12 into your user folder. Type Y and press Enter.
+   - It installs the Python packages, makes the SYNTHETIC demo data and runs the research once.
+   Later runs start in a few seconds.
+
+4. Your browser opens at http://127.0.0.1:8000 (or the next free port, as the window shows).
+   Pick a day in the Replay strip and press Start.
+   - The demo data is SYNTHETIC (never real market data) and has no edge, so the board
+     correctly stays empty: nothing passes the evidence gate.
+   - To watch demo cards flow anyway (gate bypassed, clearly marked):
+       Mac/Linux:  bash ./scripts/start.sh --open --demo
+       Windows:    powershell -ExecutionPolicy Bypass -File scripts\start.ps1 -Open -Demo
+
+5. To stop: press Ctrl+C in that window, or close it.
+
+The terminal runs only on your computer (127.0.0.1) and never places orders.
+Real NSE data: see README.md, section "Real data (Upstox)".

@@ -269,6 +269,31 @@ before the idea's day.
 - The Docker image could not be built in the sandbox (no Docker daemon). `docker compose config`
   validates.
 
+### D-046 Local start and desktop package
+
+- **Start scripts.** `scripts/start.sh` (macOS/Linux/WSL, bash 3.2-compatible) and
+  `scripts/start.ps1` (Windows PowerShell 5.1+) set everything up on the first run, then serve
+  on 127.0.0.1.
+  - First-run setup: install the backend, build the UI if it isn't prebuilt, generate the
+    synthetic data and run the research once.
+  - Port: a port you name is used exactly, and the script stops if it is taken. With no port,
+    the default moves to the first free port from 8000.
+  - Python: if neither uv nor Python 3.12 is present, the script asks before running the
+    official uv installer (https://docs.astral.sh/uv/getting-started/installation/). It never
+    installs silently.
+  - Updates: the backend is reinstalled when `backend/pyproject.toml` is newer than the
+    install stamp. The UI is rebuilt when its sources are newer than `frontend/dist` and Node
+    is available.
+- **Desktop package.** `scripts/package.sh` zips git HEAD with a UI built from exactly those
+  sources, plus `RUN-mac.command`, `RUN-windows.bat` and `RUN-linux.sh`.
+  - No venv, data, journal or `.env` goes in.
+  - `.gitattributes` pins LF for the `.sh`/`.command` files and CRLF for the `.bat`/`.ps1`
+    files.
+- **Browser.** `dalal serve --open` opens the browser once the port accepts connections.
+- **Dependencies.** `polars` and `shap` were removed: nothing imported them. Thesis drivers are
+  exact TreeSHAP from LightGBM `pred_contrib` (D-041), so the `shap` package isn't needed.
+  `tzdata` was added so `zoneinfo` works on Windows, which has no system tz database.
+
 ---
 
 ## Runtime verification (`make verify`)

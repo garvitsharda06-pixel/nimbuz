@@ -2,10 +2,13 @@
 DALAL := backend/.venv/bin/dalal
 PORT ?= 8000
 
-.PHONY: start setup test lint synth synth-edge check-data verify download-data backtest replay live serve ui build-ui e2e
+.PHONY: start package setup test lint synth synth-edge check-data verify download-data backtest replay live serve ui build-ui e2e
 
 start:            ## one command: install (first run), synth + research (first run), serve on $(PORT)
 	./scripts/start.sh $(PORT) $(ARGS)
+
+package:          ## package/Dalal-Desk.zip: git HEAD + prebuilt UI + RUN files, for a Desktop
+	./scripts/package.sh
 
 setup:
 	cd backend && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -e ".[dev]"
